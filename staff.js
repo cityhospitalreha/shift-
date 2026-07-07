@@ -12,21 +12,7 @@
 // ============================================================
 
 const STAFF = [
-  // ---- ST ----
-  { id: "st01", name: "上地",  job: "ST" },
-  { id: "st02", name: "今野",  job: "ST" },
-  { id: "st03", name: "岡安",  job: "ST" },
-
-  // ---- OT ----
-  { id: "ot01", name: "酒井",  job: "OT" },
-  { id: "ot02", name: "今野（桃）",  job: "OT" },
-  { id: "ot03", name: "佐藤（富）",  job: "OT" },
-  { id: "ot04", name: "草野",  job: "OT" },
-  { id: "ot05", name: "森",  job: "OT" },
-  { id: "ot06", name: "佐藤（詩）",  job: "OT" },
-  { id: "ot07", name: "黒坂",  job: "OT" },
-
-  // ---- PT ----
+   // ---- PT ----
   { id: "pt01", name: "我妻",  job: "PT" },
   { id: "pt02", name: "及川",  job: "PT" },
   { id: "pt03", name: "千葉",  job: "PT" },
@@ -37,5 +23,21 @@ const STAFF = [
   { id: "pt07", name: "一條",  job: "PT" },
   { id: "pt07", name: "鈴木",  job: "PT" },
   { id: "pt07", name: "阿部",  job: "PT" },
-  { id: "pt07", name: "赤間",  job: "PT" },
+  { id: "pt07", name: "赤間",  job: "PT" }, 
+
+  // ---- OT ----
+  { id: "ot01", name: "酒井",  job: "OT" },
+  { id: "ot02", name: "今野（桃）",  job: "OT" },
+  { id: "ot03", name: "佐藤（富）",  job: "OT" },
+  { id: "ot04", name: "草野",  job: "OT" },
+  { id: "ot05", name: "森",  job: "OT" },
+  { id: "ot06", name: "佐藤（詩）",  job: "OT" },
+  { id: "ot07", name: "黒坂",  job: "OT" },
+
+
+  
+  // ---- ST ----
+  { id: "st01", name: "上地",  job: "ST" },
+  { id: "st02", name: "今野",  job: "ST" },
+  { id: "st03", name: "岡安",  job: "ST" },
 ];
