@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>シフト作成（管理者用）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   デザイントークン（管理画面：濃紺ヘッダーの業務ツール仕様）
+   ============================================================ */
+:root{
+  --bg:#F5F6F8; --surface:#FFFFFF;
+  --border:#E3E6EB; --border-strong:#C7CCD4;
+  --ink:#1B2430; --sub:#68707E;
+  --accent:#1E3A5F; --accent-hover:#274A78;
+  --head-dark:#1B2A40;            /* ヘッダーバー */
+  --sat:#2563AB; --sun:#C0392B;
+  --m2:#1E8A55; --m1:#2563AB; --m3:#B07B1E; --m4:#C0392B;
+  --warn-bg:#FDF3F2;
+  --shadow:0 1px 3px rgba(16,24,40,.07), 0 1px 2px rgba(16,24,40,.04);
+}
+*{box-sizing:border-box;}
+html,body{margin:0; padding:0;}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:'Noto Sans JP','Hiragino Sans',Meiryo,sans-serif;
+  font-size:14px; line-height:1.6; padding:0 18px 48px;
+  font-feature-settings:"palt";
+}
+
+/* ---------- ヘッダーバー（濃紺） ---------- */
+header{
+  background:var(--head-dark); color:#fff;
+  margin:0 -18px 16px; padding:13px 22px;
+  display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;
+  box-shadow:var(--shadow);
+}
+header h1{font-size:16.5px; margin:0; font-weight:700; letter-spacing:.05em;}
+header .sub{font-size:12px; color:#9FB0C6; font-weight:500;}
+
+/* ---------- ツールバー ---------- */
+.toolbar{
+  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  box-shadow:var(--shadow);
+  padding:11px 14px; margin-bottom:12px;
+  display:flex; flex-wrap:wrap; gap:10px 20px; align-items:center;
+}
+.toolbar .group{display:flex; align-items:center; gap:7px;}
+.toolbar label{font-size:12.5px; font-weight:600; color:var(--sub);}
+input[type="month"], input[type="number"]{
+  border:1px solid var(--border-strong); border-radius:6px;
+  padding:5px 8px; font-size:13.5px; font-family:inherit; background:var(--surface);
+  font-feature-settings:"tnum";
+}
+input[type="month"]:focus, input[type="number"]:focus{
+  outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(30,58,95,.12);
+}
+input[type="number"]{width:60px;}
+button{
+  border:1px solid var(--border-strong); background:var(--surface); color:var(--ink);
+  border-radius:6px; padding:7px 15px; font-size:13px; font-weight:600;
+  font-family:inherit; cursor:pointer; box-shadow:var(--shadow);
+  transition:background .12s;
+}
+button:hover{background:#EEF1F5;}
+button.primary{background:var(--accent); color:#fff; border-color:var(--accent);}
+button.primary:hover{background:var(--accent-hover);}
+button:disabled{border-color:var(--border); color:#B5BCC6; background:var(--surface); cursor:default; box-shadow:none;}
+
+.banner{
+  background:#EDF1F7; color:var(--accent); border:1px solid #D6DEE9;
+  border-radius:6px; padding:8px 13px; font-size:13px; font-weight:600; margin-bottom:12px;
+}
+.banner.error{background:#FDF1EF; color:var(--sun); border-color:#F0D5D1;}
+
+/* ---------- 情報パネル ---------- */
+.info-row{display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;}
+.panel{
+  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  box-shadow:var(--shadow);
+  padding:10px 14px; font-size:13px; flex:1; min-width:250px;
+}
+.panel b{
+  font-size:11.5px; display:block; color:var(--sub); letter-spacing:.08em;
+  border-bottom:1px solid var(--border); margin-bottom:6px; padding-bottom:4px;
+}
+.panel.warn{border-color:#EBC4BE; background:var(--warn-bg);}
+.panel.warn b{color:var(--sun); border-color:#EBC4BE;}
+.panel ul{margin:4px 0 0; padding-left:18px;}
+.panel li{margin:2px 0;}
+
+/* ---------- シフト表 ---------- */
+.table-scroll{
+  overflow-x:auto; background:var(--surface);
+  border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow);
+}
+table{border-collapse:collapse; width:max-content; min-width:100%; font-feature-settings:"tnum";}
+th,td{
+  border:1px solid var(--border); padding:4px 6px; text-align:center;
+  font-size:13px; white-space:nowrap; background:var(--surface);
+}
+thead th{background:#F0F2F5; font-weight:700; color:var(--ink);}
+th.date-sat{color:var(--sat);} th.date-sun{color:var(--sun);}
+th .holiday{display:block; font-size:9px; font-weight:600; color:var(--sub);}
+
+/* 名前列を左に固定 */
+.col-name{
+  position:sticky; left:0; z-index:2;
+  min-width:100px; text-align:left; background:var(--surface);
+  border-right:2px solid var(--border-strong);
+  font-weight:500;
+}
+thead .col-name{background:#F0F2F5; z-index:3; font-weight:700;}
+.col-name .job{font-size:10px; color:var(--sub); margin-left:5px; font-weight:500;}
+
+/* 職種の区切り行 */
+tr.job-head td{
+  background:#E8ECF2; color:var(--accent); text-align:left; font-weight:700;
+  letter-spacing:.06em; border-top:2px solid var(--border-strong); font-size:12px;
+}
+
+/* 希望記号の色 */
+.p-m2{color:var(--m2); font-weight:700;}
+.p-m1{color:var(--m1); font-weight:700;}
+.p-m3{color:var(--m3); font-weight:700;}
+.p-m4{color:var(--m4); font-weight:700;}
+.p-none{color:#C2C8D0;}
+
+/* 割り当て済みセル：濃紺地に白 */
+td.cell{cursor:pointer; min-width:46px; user-select:none; transition:background .1s;}
+td.cell:hover{background:#EEF1F5;}
+td.cell.assigned{background:var(--accent);}
+td.cell.assigned:hover{background:var(--accent-hover);}
+td.cell.assigned span{color:#fff !important;}
+td.cell.violation{box-shadow:inset 0 0 0 2px var(--m4);}
+tr.unsubmitted td{background:#FAFBFC; color:#B5BCC6;}
+tr.unsubmitted .col-name{color:#B5BCC6;}
+
+/* 必要人数入力行・充足状況行 */
+td.req-cell{background:#F7F9FB;}
+td.req-cell input{width:44px; text-align:center; padding:2px;}
+td.status-ok{color:var(--m2); font-weight:700; background:#F4FAF6;}
+td.status-short{color:var(--m4); font-weight:700; background:var(--warn-bg);}
+
+td.total-col{border-left:2px solid var(--border-strong); font-weight:700;}
+
+.note{font-size:12px; color:var(--sub); margin-top:10px;}
+.hidden{display:none !important;}
+
+/* ---------- 印刷時：表だけを出す ---------- */
+@media print{
+  .toolbar, .info-row, .banner, .note, header .sub{display:none !important;}
+  body{padding:0; background:#fff;}
+  header{background:#fff; color:#000; box-shadow:none; margin:0; padding:4px 0; border-bottom:1px solid #000;}
+  .table-scroll{border:none; overflow:visible; box-shadow:none; border-radius:0;}
+  table{width:100%;}
+  th,td{font-size:10.5px; padding:2px 3px;}
+  td.cell.assigned{background:#333 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>シフト作成（管理者用）</h1>
+  <span class="sub" id="modeLabel"></span>
+  <span class="sub" id="printTitle"></span>
+</header>
+
+<div id="bannerArea"></div>
+
+<!-- ツールバー -->
+<div class="toolbar">
+  <div class="group">
+    <label>対象月</label>
+    <input type="month" id="monthInput">
+    <button onclick="loadMonth()">読み込み</button>
+  </div>
+  <div class="group" id="demoGenGroup" style="display:none">
+    <button onclick="genDemoData()">デモデータ生成</button>
+  </div>
+  <div class="group">
+    <label>必要人数（全日）</label>
+    <input type="number" id="defaultReq" value="5" min="0" max="21">
+    <button onclick="applyDefaultReq()">全日に反映</button>
+  </div>
+  <div class="group">
+    <label><input type="checkbox" id="ruleConsecutive" checked onchange="saveState();renderAll()"> 連続勤務させない</label>
+  </div>
+  <div class="group">
+    <button class="primary" onclick="autoAssign()">自動割り当て</button>
+    <button onclick="clearAssign()">割り当てクリア</button>
+  </div>
+  <div class="group">
+    <button onclick="copyTsv()">表をコピー</button>
+    <button onclick="window.print()">印刷</button>
+  </div>
+</div>
+
+<!-- 未提出者・警告 -->
+<div class="info-row">
+  <div class="panel" id="unsubmittedPanel"><b>未提出者</b><span id="unsubmittedList">—</span></div>
+  <div class="panel" id="commentPanel"><b>コメント</b><div id="commentList">—</div></div>
+  <div class="panel warn hidden" id="warnPanel"><b>警告</b><ul id="warnList"></ul></div>
+</div>
+
+<!-- シフト表 -->
+<div class="table-scroll">
+  <table id="shiftTable"></table>
+</div>
+<p class="note">
+  セルをクリック（タップ）すると出勤の割り当て／解除ができます。黒＝出勤。
+  「自動割り当て」は ×以外の人から、◎＞〇＞△ の優先度と回数の公平さを考慮して選びます。実行するたびに組み直されます。
+</p>
+
+<script src="config.js"></script>
+<script src="staff.js"></script>
+<script>
+/* ============================================================
+   祝日データ（①と同じ二段構え）
+   ============================================================ */
+const HOLIDAYS_FALLBACK = {
+  "2026-01-01":"元日","2026-01-12":"成人の日","2026-02-11":"建国記念の日",
+  "2026-02-23":"天皇誕生日","2026-03-20":"春分の日","2026-04-29":"昭和の日",
+  "2026-05-03":"憲法記念日","2026-05-04":"みどりの日","2026-05-05":"こどもの日",
+  "2026-05-06":"振替休日","2026-07-20":"海の日","2026-08-11":"山の日",
+  "2026-09-21":"敬老の日","2026-09-22":"国民の休日","2026-09-23":"秋分の日",
+  "2026-10-12":"スポーツの日","2026-11-03":"文化の日","2026-11-23":"勤労感謝の日",
+  "2027-01-01":"元日","2027-01-11":"成人の日","2027-02-11":"建国記念の日",
+  "2027-02-23":"天皇誕生日","2027-03-21":"春分の日","2027-03-22":"振替休日",
+  "2027-04-29":"昭和の日","2027-05-03":"憲法記念日","2027-05-04":"みどりの日",
+  "2027-05-05":"こどもの日","2027-07-19":"海の日","2027-08-11":"山の日",
+  "2027-09-20":"敬老の日","2027-09-23":"秋分の日","2027-10-11":"スポーツの日",
+  "2027-11-03":"文化の日","2027-11-23":"勤労感謝の日"
+};
+
+/* ============================================================
+   アプリの状態
+   ============================================================ */
+let demoMode = false;
+let holidays = {};
+let month = "";          // "2026-09"
+let targetDays = [];     // [{date,day,dow,holiday}]
+let responses = {};      // staffId → {answers, comment, sentAt}
+let req = {};            // date → 必要人数
+let assignment = {};     // date → {staffId:true}
+
+const DOW_JA = ["日","月","火","水","木","金","土"];
+const MARK_CLASS = {"◎":"p-m2","〇":"p-m1","△":"p-m3","×":"p-m4"};
+const PREF_SCORE = {"◎":3,"〇":2,"△":1};   // 自動割り当て時の優先度
+
+/* ============================================================
+   起動
+   ============================================================ */
+init();
+
+async function init(){
+  try{
+    const res = await fetch("https://holidays-jp.github.io/api/v1/date.json");
+    holidays = await res.json();
+  }catch(e){ holidays = HOLIDAYS_FALLBACK; }
+
+  if(!CONFIG.GAS_URL){
+    demoMode = true;
+    document.getElementById("modeLabel").textContent = "デモモード（GAS未接続）";
+    document.getElementById("demoGenGroup").style.display = "";
+    document.getElementById("monthInput").value = "2026-09";
+    showBanner("", "デモモード：「デモデータ生成」を押すと職員A〜Uの希望がランダムに作られます。");
+    loadMonth();
+  }else{
+    // GASから現在の募集設定を取得して、その月を初期表示
+    try{
+      const res = await fetch(CONFIG.GAS_URL + "?action=settings");
+      const s = await res.json();
+      if(!s.ok) throw new Error(s.error);
+      document.getElementById("monthInput").value = s.month;
+      await loadMonth();
+    }catch(e){
+      showBanner("error", "サーバーに接続できませんでした：" + e);
+    }
+  }
+}
+
+/* ============================================================
+   月の読み込み：対象日を作り、回答と保存済みの作業状態を復元
+   ============================================================ */
+async function loadMonth(){
+  month = document.getElementById("monthInput").value;
+  if(!month){ alert("対象月を選んでください"); return; }
+
+  buildTargetDays();
+
+  // --- 回答の取得 ---
+  if(!demoMode){
+    try{
+      const res = await fetch(CONFIG.GAS_URL + "?action=responses&month=" + month);
+      const data = await res.json();
+      if(!data.ok) throw new Error(data.error);
+      responses = {};
+      data.responses.forEach(r => { responses[r.staffId] = r; });
+      showBanner("", `${data.responses.length} / ${STAFF.length} 名の回答を読み込みました。`);
+    }catch(e){
+      showBanner("error", "回答の読み込みに失敗しました：" + e);
+      responses = {};
+    }
+  }
+  // （デモモードでは「デモデータ生成」ボタンで responses を作る）
+
+  restoreState();   // この月の必要人数・割り当てを端末から復元
+  renderAll();
+}
+
+function buildTargetDays(){
+  targetDays = [];
+  const [y,m] = month.split("-").map(Number);
+  const last = new Date(y, m, 0).getDate();
+  for(let d=1; d<=last; d++){
+    const dt = new Date(y, m-1, d);
+    const dow = dt.getDay();
+    const key = `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const holiday = holidays[key] || null;
+    if(dow===0 || dow===6 || holiday){
+      targetDays.push({date:key, day:d, dow:dow, holiday:holiday});
+    }
+  }
+}
+
+/* ============================================================
+   デモデータ生成（職員A〜Uのランダム希望を作る）
+   ============================================================ */
+function genDemoData(){
+  responses = {};
+  // 21人中3人はわざと「未提出」にする／2人は日曜すべて×の想定（ママさん役）
+  const unsubmitted = new Set([STAFF[6].id, STAFF[13].id, STAFF[20].id]);
+  const sundayNG = new Set([STAFF[1].id, STAFF[9].id]);
+
+  STAFF.forEach(s=>{
+    if(unsubmitted.has(s.id)) return;
+    const answers = {};
+    targetDays.forEach(t=>{
+      if(sundayNG.has(s.id) && (t.dow===0 || t.holiday)){
+        answers[t.date] = "×";
+        return;
+      }
+      // 出現率：◎15% 〇45% △20% ×20%
+      const r = Math.random();
+      answers[t.date] = r<0.15 ? "◎" : r<0.60 ? "〇" : r<0.80 ? "△" : "×";
+    });
+    responses[s.id] = {
+      answers: answers,
+      comment: Math.random()<0.2 ? "第3週は午前のみ可" : "",
+      sentAt: "demo"
+    };
+  });
+  assignment = {};   // 希望を作り直したら割り当てもリセット
+  saveState();
+  renderAll();
+  showBanner("", "デモデータを生成しました（未提出3名、日曜不可2名を含む）。「自動割り当て」を試してください。");
+}
+
+/* ============================================================
+   自動割り当てアルゴリズム
+   ------------------------------------------------------------
+   考え方（貪欲法＝グリーディ法：その場その場で最善を選ぶ方式）
+   1. 候補者が少ない日（=難しい日）から先に埋める
+   2. 各日について、出られる人に点数を付けて上位から採用
+        点数 = 希望の強さ(◎3 〇2 △1)×10
+              − すでに割り当てた回数×7   ←回数の公平化
+              + 小さな乱数               ←同点のくじ引き
+   3. ×の人、未提出の人、（設定ONなら）前日・翌日に勤務がある人は除外
+   ============================================================ */
+function autoAssign(){
+  assignment = {};
+  const counts = {};   // staffId → 割り当て回数
+  STAFF.forEach(s=>counts[s.id]=0);
+
+  // 「難しい日」順に並べ替え（×以外で回答済みの人数が少ない日が先）
+  const order = [...targetDays].sort((a,b)=>{
+    const ca = eligibleCount(a.date), cb = eligibleCount(b.date);
+    return ca - cb || a.date.localeCompare(b.date);
+  });
+
+  const ruleOn = document.getElementById("ruleConsecutive").checked;
+
+  order.forEach(t=>{
+    const need = req[t.date] ?? 0;
+    assignment[t.date] = assignment[t.date] || {};
+
+    const cands = STAFF
+      .filter(s=>{
+        const r = responses[s.id];
+        if(!r) return false;                        // 未提出
+        const mark = r.answers[t.date];
+        if(!mark || mark==="×") return false;       // ×は除外
+        if(ruleOn && hasAdjacentAssign(s.id, t.date)) return false; // 連続禁止
+        return true;
+      })
+      .map(s=>({
+        id: s.id,
+        score: PREF_SCORE[responses[s.id].answers[t.date]]*10
+               - counts[s.id]*7
+               + Math.random()*3
+      }))
+      .sort((a,b)=>b.score - a.score);
+
+    cands.slice(0, need).forEach(c=>{
+      assignment[t.date][c.id] = true;
+      counts[c.id]++;
+    });
+  });
+
+  saveState();
+  renderAll();
+}
+
+function eligibleCount(date){
+  return STAFF.filter(s=>{
+    const r = responses[s.id];
+    return r && r.answers[date] && r.answers[date] !== "×";
+  }).length;
+}
+
+// 前日または翌日（暦の上で隣り合う日）に割り当て済みか？
+// 土日ペアや9月の5連休のような並びをここで検出する
+function hasAdjacentAssign(staffId, date){
+  const d = new Date(date);
+  for(const diff of [-1, 1]){
+    const nd = new Date(d.getTime() + diff*86400000);
+    const key = `${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,"0")}-${String(nd.getDate()).padStart(2,"0")}`;
+    if(assignment[key] && assignment[key][staffId]) return true;
+  }
+  return false;
+}
+
+function clearAssign(){
+  if(!confirm("割り当てをすべて解除しますか？（希望データは消えません）")) return;
+  assignment = {};
+  saveState(); renderAll();
+}
+
+/* ============================================================
+   手動修正：セルのクリックで割り当てのON/OFF
+   ============================================================ */
+function toggleCell(staffId, date){
+  const r = responses[staffId];
+  const assigned = assignment[date] && assignment[date][staffId];
+
+  if(!assigned){
+    if(!r && !confirm("この職員は未提出です。割り当てますか？")) return;
+    if(r && r.answers[date]==="×" && !confirm("この日は「×（出勤できない）」の希望です。割り当てますか？")) return;
+    assignment[date] = assignment[date] || {};
+    assignment[date][staffId] = true;
+  }else{
+    delete assignment[date][staffId];
+  }
+  saveState(); renderAll();
+}
+
+/* ============================================================
+   画面描画
+   ============================================================ */
+function renderAll(){
+  renderTable();
+  renderPanels();
+  document.getElementById("printTitle").textContent =
+    month ? month.replace("-","年")+"月分" : "";
+}
+
+function renderTable(){
+  const tbl = document.getElementById("shiftTable");
+  tbl.innerHTML = "";
+  if(targetDays.length===0) return;
+
+  // ---- 見出し3行（日付／必要人数／充足状況） ----
+  const thead = document.createElement("thead");
+
+  const tr1 = document.createElement("tr");
+  tr1.innerHTML = `<th class="col-name">職員</th>`;
+  targetDays.forEach(t=>{
+    const isSun = (t.dow===0 || t.holiday);
+    tr1.innerHTML += `<th class="${isSun?"date-sun":"date-sat"}">${t.day}(${DOW_JA[t.dow]})`+
+                     `${t.holiday?`<span class="holiday">${t.holiday}</span>`:""}</th>`;
+  });
+  tr1.innerHTML += `<th class="total-col">計</th>`;
+  thead.appendChild(tr1);
+
+  const tr2 = document.createElement("tr");
+  tr2.innerHTML = `<th class="col-name">必要人数</th>`;
+  targetDays.forEach(t=>{
+    const v = req[t.date] ?? "";
+    tr2.innerHTML += `<td class="req-cell"><input type="number" min="0" max="21" value="${v}"
+                       onchange="setReq('${t.date}', this.value)"></td>`;
+  });
+  tr2.innerHTML += `<td class="total-col">—</td>`;
+  thead.appendChild(tr2);
+
+  const tr3 = document.createElement("tr");
+  tr3.innerHTML = `<th class="col-name">割当/必要</th>`;
+  targetDays.forEach(t=>{
+    const n = countAssigned(t.date);
+    const need = req[t.date] ?? 0;
+    const ok = n >= need;
+    tr3.innerHTML += `<td class="${ok?"status-ok":"status-short"}">${n}/${need}</td>`;
+  });
+  tr3.innerHTML += `<td class="total-col">—</td>`;
+  thead.appendChild(tr3);
+  tbl.appendChild(thead);
+
+  // ---- 本体：職種ごとにグループ表示 ----
+  const tbody = document.createElement("tbody");
+  ["ST","OT","PT"].forEach(job=>{
+    const trh = document.createElement("tr");
+    trh.className = "job-head";
+    trh.innerHTML = `<td class="col-name">${job}</td><td colspan="${targetDays.length+1}"></td>`;
+    tbody.appendChild(trh);
+
+    STAFF.filter(s=>s.job===job).forEach(s=>{
+      const r = responses[s.id];
+      const tr = document.createElement("tr");
+      if(!r) tr.className = "unsubmitted";
+
+      let html = `<td class="col-name">${s.name}${r?"":`<span class="job">未提出</span>`}</td>`;
+      let myCount = 0;
+
+      targetDays.forEach(t=>{
+        const mark = r ? (r.answers[t.date] || "") : "";
+        const assigned = assignment[t.date] && assignment[t.date][s.id];
+        if(assigned) myCount++;
+        // ×なのに割り当て、または連続勤務は赤枠で知らせる
+        const bad = assigned && (mark==="×" ||
+                    (document.getElementById("ruleConsecutive").checked && hasAdjacentAssignExcl(s.id, t.date)));
+        html += `<td class="cell ${assigned?"assigned":""} ${bad?"violation":""}"
+                     onclick="toggleCell('${s.id}','${t.date}')">`+
+                `<span class="${MARK_CLASS[mark]||"p-none"}">${mark || "―"}</span></td>`;
+      });
+
+      html += `<td class="total-col">${myCount}</td>`;
+      tr.innerHTML = html;
+      tbody.appendChild(tr);
+    });
+  });
+  tbl.appendChild(tbody);
+}
+
+// 連続チェック（表示用）：この日を除いた隣接日を確認
+function hasAdjacentAssignExcl(staffId, date){
+  const d = new Date(date);
+  for(const diff of [-1,1]){
+    const nd = new Date(d.getTime() + diff*86400000);
+    const key = `${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,"0")}-${String(nd.getDate()).padStart(2,"0")}`;
+    if(assignment[key] && assignment[key][staffId]) return true;
+  }
+  return false;
+}
+
+function renderPanels(){
+  // 未提出者
+  const un = STAFF.filter(s=>!responses[s.id]).map(s=>`${s.name}(${s.job})`);
+  document.getElementById("unsubmittedList").textContent =
+    un.length ? un.join("、") : "なし（全員提出済み）";
+
+  // コメント
+  const cm = STAFF.filter(s=>responses[s.id] && responses[s.id].comment)
+                  .map(s=>`<li>${s.name}：${responses[s.id].comment}</li>`);
+  document.getElementById("commentList").innerHTML =
+    cm.length ? `<ul>${cm.join("")}</ul>` : "なし";
+
+  // 警告
+  const warns = [];
+  targetDays.forEach(t=>{
+    const n = countAssigned(t.date), need = req[t.date] ?? 0;
+    if(n < need) warns.push(`${t.day}日(${DOW_JA[t.dow]})：人数不足（${n}/${need}）`);
+  });
+  STAFF.forEach(s=>{
+    targetDays.forEach(t=>{
+      const a = assignment[t.date] && assignment[t.date][s.id];
+      if(!a) return;
+      const mark = responses[s.id] ? responses[s.id].answers[t.date] : "";
+      if(mark==="×") warns.push(`${s.name}：${t.day}日は×希望ですが割り当てられています`);
+    });
+  });
+  const panel = document.getElementById("warnPanel");
+  const list = document.getElementById("warnList");
+  if(warns.length){
+    panel.classList.remove("hidden");
+    list.innerHTML = warns.map(w=>`<li>${w}</li>`).join("");
+  }else{
+    panel.classList.add("hidden");
+  }
+}
+
+function countAssigned(date){
+  return assignment[date] ? Object.keys(assignment[date]).length : 0;
+}
+
+/* ============================================================
+   必要人数の設定
+   ============================================================ */
+function setReq(date, val){
+  req[date] = Number(val) || 0;
+  saveState(); renderAll();
+}
+function applyDefaultReq(){
+  const v = Number(document.getElementById("defaultReq").value) || 0;
+  targetDays.forEach(t=>req[t.date]=v);
+  saveState(); renderAll();
+}
+
+/* ============================================================
+   作業状態の保存・復元（月ごとに端末内へ自動保存）
+   ============================================================ */
+function saveState(){
+  if(!month) return;
+  localStorage.setItem("shift_admin_"+month, JSON.stringify({
+    req: req,
+    assignment: assignment,
+    rule: document.getElementById("ruleConsecutive").checked,
+    demoResponses: demoMode ? responses : undefined  // デモの希望も残す
+  }));
+}
+function restoreState(){
+  req = {}; assignment = {};
+  const raw = localStorage.getItem("shift_admin_"+month);
+  if(!raw) return;
+  try{
+    const d = JSON.parse(raw);
+    req = d.req || {};
+    assignment = d.assignment || {};
+    document.getElementById("ruleConsecutive").checked = d.rule !== false;
+    if(demoMode && d.demoResponses) responses = d.demoResponses;
+  }catch(e){ /* 壊れた保存は無視 */ }
+}
+
+/* ============================================================
+   TSV出力（Excelに貼り付けられる形式でクリップボードへ）
+   ============================================================ */
+function copyTsv(){
+  let out = "職員\t職種\t" + targetDays.map(t=>`${t.day}(${DOW_JA[t.dow]})`).join("\t") + "\t計\n";
+  ["ST","OT","PT"].forEach(job=>{
+    STAFF.filter(s=>s.job===job).forEach(s=>{
+      let cnt = 0;
+      const cells = targetDays.map(t=>{
+        const a = assignment[t.date] && assignment[t.date][s.id];
+        if(a) cnt++;
+        return a ? "出" : "";
+      });
+      out += `${s.name}\t${s.job}\t${cells.join("\t")}\t${cnt}\n`;
+    });
+  });
+  navigator.clipboard.writeText(out).then(
+    ()=>showBanner("", "表をコピーしました。Excelなどに貼り付けできます。"),
+    ()=>showBanner("error", "コピーに失敗しました。ブラウザの権限設定を確認してください。")
+  );
+}
+
+function showBanner(type, text){
+  document.getElementById("bannerArea").innerHTML =
+    `<div class="banner ${type}">${text}</div>`;
+}
+</script>
+</body>
+</html>
