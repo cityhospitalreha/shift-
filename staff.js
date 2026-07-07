@@ -35,7 +35,6 @@ const STAFF = [
   { id: "ot07", name: "黒坂",  job: "OT" },
 
 
-  
   // ---- ST ----
   { id: "st01", name: "上地",  job: "ST" },
   { id: "st02", name: "今野",  job: "ST" },
