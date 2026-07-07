@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>シフト希望入力</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   デザイントークン（プロフェッショナル：ネイビー×グレー階調）
+   ============================================================ */
+:root{
+  --bg:#F5F6F8;            /* ページ背景（ごく薄いグレー） */
+  --surface:#FFFFFF;       /* カード面 */
+  --border:#E3E6EB;        /* 通常罫線 */
+  --border-strong:#C7CCD4; /* 強い罫線 */
+  --ink:#1B2430;           /* 本文 */
+  --sub:#68707E;           /* 補助文字 */
+  --accent:#1E3A5F;        /* メイン：濃紺 */
+  --accent-hover:#274A78;
+  --sat:#2563AB; --sun:#C0392B;
+  --m2:#1E8A55; --m1:#2563AB; --m3:#B07B1E; --m4:#C0392B;
+  --shadow:0 1px 3px rgba(16,24,40,.07), 0 1px 2px rgba(16,24,40,.04);
+  --r:8px;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0; padding:0;}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:'Noto Sans JP','Hiragino Sans',Meiryo,sans-serif;
+  font-size:16px; line-height:1.65;
+  padding-bottom:104px;
+  font-feature-settings:"palt";  /* 日本語の文字詰め */
+}
+.wrap{max-width:520px; margin:0 auto; padding:0 16px;}
+
+/* ---------- ヘッダー ---------- */
+header{
+  background:var(--surface); border-bottom:1px solid var(--border);
+  box-shadow:var(--shadow);
+  padding:16px 0 14px; margin-bottom:18px;
+}
+header .wrap{display:flex; flex-direction:column; gap:3px;}
+.app-name{font-size:12px; font-weight:500; color:var(--sub); letter-spacing:.12em;}
+.month-title{font-size:24px; font-weight:700; letter-spacing:.02em; color:var(--accent); line-height:1.3;}
+.deadline-chip{
+  display:inline-flex; width:fit-content; align-items:center;
+  background:#FDF1EF; color:var(--sun); border:1px solid #F0D5D1;
+  border-radius:4px; padding:2px 10px; font-size:12.5px; font-weight:700;
+  letter-spacing:.03em; margin-top:2px;
+}
+
+/* ---------- カード ---------- */
+.card{
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--r); box-shadow:var(--shadow);
+  padding:18px 16px; margin-bottom:14px;
+}
+.card h2{
+  font-size:13px; font-weight:700; letter-spacing:.06em;
+  color:var(--sub); margin:0 0 12px;
+  display:flex; align-items:center; gap:8px;
+}
+.step-num{
+  background:var(--accent); color:#fff; border-radius:4px;
+  width:20px; height:20px; display:inline-flex;
+  align-items:center; justify-content:center; font-size:11.5px; font-weight:700;
+}
+
+/* ---------- 名前選択 ---------- */
+select{
+  width:100%; font-size:16.5px; padding:11px 12px;
+  border:1px solid var(--border-strong); border-radius:6px;
+  background:var(--surface); color:var(--ink); font-family:inherit;
+}
+select:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(30,58,95,.12);}
+
+/* ---------- 凡例 ---------- */
+.legend{display:flex; flex-wrap:wrap; gap:6px 16px; font-size:12.5px; color:var(--sub); font-weight:500;}
+.legend b{font-size:15px;}
+.legend .m2{color:var(--m2);} .legend .m1{color:var(--m1);}
+.legend .s1{color:var(--m3);} .legend .b1{color:var(--m4);}
+
+/* ---------- 一括ボタン ---------- */
+.bulk{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;}
+.bulk button{
+  border:1px solid var(--border-strong); background:var(--surface); color:var(--ink);
+  border-radius:6px; padding:6px 12px; font-size:12.5px; font-weight:600;
+  font-family:inherit; box-shadow:var(--shadow); transition:background .12s;
+}
+.bulk button:active{background:#EEF1F5;}
+
+/* ---------- 日付リスト ---------- */
+.day-row{
+  display:flex; align-items:center; gap:10px;
+  padding:10px 0; border-bottom:1px solid var(--border);
+}
+.day-row:last-child{border-bottom:none;}
+.date-block{min-width:74px; text-align:center; padding:2px 4px;}
+.date-block .d{
+  font-weight:700; font-size:20px; line-height:1.15;
+  font-feature-settings:"tnum";  /* 等幅数字：桁が揃う */
+}
+.date-block .w{font-size:11px; font-weight:700; letter-spacing:.06em;}
+.date-block .h{font-size:9.5px; line-height:1.25; margin-top:1px; color:var(--sub);}
+.is-sat{color:var(--sat);}
+.is-sun{color:var(--sun);}
+
+.marks{display:flex; gap:6px; flex:1; justify-content:flex-end;}
+.mark-btn{
+  width:52px; height:46px; border-radius:6px;
+  border:1px solid var(--border-strong); background:var(--surface);
+  font-size:19px; font-weight:700; color:#A6AEB9;
+  font-family:inherit; transition:transform .06s, background .12s;
+}
+.mark-btn:active{transform:scale(.94);}
+.mark-btn[aria-pressed="true"]{color:#fff; border-color:transparent; box-shadow:inset 0 1px 2px rgba(0,0,0,.12);}
+.mark-btn[data-m="◎"][aria-pressed="true"]{background:var(--m2);}
+.mark-btn[data-m="〇"][aria-pressed="true"]{background:var(--m1);}
+.mark-btn[data-m="△"][aria-pressed="true"]{background:var(--m3);}
+.mark-btn[data-m="×"][aria-pressed="true"]{background:var(--m4);}
+
+/* ---------- コメント ---------- */
+textarea{
+  width:100%; min-height:72px; font-size:16px; padding:11px;
+  border:1px solid var(--border-strong); border-radius:6px;
+  resize:vertical; font-family:inherit; background:var(--surface);
+}
+textarea:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(30,58,95,.12);}
+
+/* ---------- 画面下の固定バー ---------- */
+.footer-bar{
+  position:fixed; left:0; right:0; bottom:0; z-index:50;
+  background:var(--surface); border-top:1px solid var(--border);
+  box-shadow:0 -2px 8px rgba(16,24,40,.06);
+  padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+}
+.footer-inner{max-width:520px; margin:0 auto; display:flex; align-items:center; gap:12px;}
+.progress-text{font-size:12.5px; font-weight:700; color:var(--sub); flex:1; line-height:1.4; font-feature-settings:"tnum";}
+.progress-text.done{color:var(--m2);}
+.submit-btn{
+  background:var(--accent); color:#fff; border:none; border-radius:6px;
+  padding:13px 26px; font-size:15.5px; font-weight:700; min-width:132px;
+  font-family:inherit; letter-spacing:.04em; box-shadow:var(--shadow);
+  transition:background .12s;
+}
+.submit-btn:active{background:var(--accent-hover);}
+.submit-btn:disabled{background:#BEC5CF; box-shadow:none;}
+
+/* ---------- お知らせ・状態表示 ---------- */
+.banner{
+  background:#EDF1F7; color:var(--accent); border:1px solid #D6DEE9;
+  border-radius:6px; padding:9px 13px; font-size:13px; font-weight:600; margin-bottom:14px;
+}
+.banner.error{background:#FDF1EF; color:var(--sun); border-color:#F0D5D1;}
+.banner.sent{background:#EDF7F1; color:var(--m2); border-color:#D2E8DC;}
+
+/* デモモード専用：月切り替えバー */
+.demo-bar{display:flex; gap:6px; margin-bottom:14px;}
+.demo-bar button{
+  flex:1; border:1px solid var(--border-strong); background:var(--surface); color:var(--ink);
+  border-radius:6px; padding:8px 0; font-size:14px; font-weight:700;
+  font-family:inherit; box-shadow:var(--shadow); transition:background .12s;
+}
+.demo-bar button.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+
+/* 締切後・送信完了などの全画面表示 */
+.screen{text-align:center; padding:64px 20px;}
+.screen .big{font-weight:700; font-size:21px; margin-bottom:10px; color:var(--accent);}
+.screen p{color:var(--sub); font-size:14px;}
+.screen button{
+  margin-top:20px; background:var(--surface); border:1px solid var(--border-strong);
+  color:var(--ink); border-radius:6px; padding:10px 24px; font-size:14.5px; font-weight:700;
+  font-family:inherit; box-shadow:var(--shadow);
+}
+.hidden{display:none !important;}
+
+@media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="app-name">土日祝 シフト希望入力</div>
+    <div class="month-title" id="monthTitle">読み込み中…</div>
+    <div class="deadline-chip" id="deadlineChip">締切を確認しています</div>
+  </div>
+</header>
+
+<div class="wrap" id="mainArea">
+  <div id="bannerArea"></div>
+  <div id="demoBar" class="demo-bar"></div>
+
+  <!-- STEP1 名前 -->
+  <div class="card">
+    <h2><span class="step-num">1</span>名前を選ぶ</h2>
+    <select id="staffSelect">
+      <option value="">-- 選択してください --</option>
+    </select>
+  </div>
+
+  <!-- STEP2 希望入力 -->
+  <div class="card">
+    <h2><span class="step-num">2</span>各日の希望をタップ</h2>
+    <div class="legend" style="margin-bottom:12px;">
+      <span><b class="m2">◎</b> 出勤したい</span>
+      <span><b class="m1">〇</b> 出勤できる</span>
+      <span><b class="s1">△</b> できれば避けたい</span>
+      <span><b class="b1">×</b> 出勤できない</span>
+    </div>
+    <div class="bulk">
+      <button type="button" onclick="bulkFill('〇', 'empty')">未入力を全部〇</button>
+      <button type="button" onclick="bulkFill('×', 'sunday')">日曜・祝日を全部×</button>
+      <button type="button" onclick="bulkClear()">やり直す</button>
+    </div>
+    <div id="dayList"></div>
+  </div>
+
+  <!-- STEP3 コメント -->
+  <div class="card">
+    <h2><span class="step-num">3</span>連絡事項（任意）</h2>
+    <textarea id="comment" placeholder="例）8/15は午前のみ可能です"></textarea>
+  </div>
+</div>
+
+<!-- 締切後の画面 -->
+<div class="screen hidden" id="closedScreen">
+  <div class="big">受付は終了しました</div>
+  <p id="closedText"></p>
+</div>
+
+<!-- 送信完了画面 -->
+<div class="screen hidden" id="doneScreen">
+  <div class="big">送信を受け付けました</div>
+  <p>希望を受け付けました。<br>締切までは何度でも修正・再送信できます。<br>（最後に送った内容が有効になります）</p>
+  <button type="button" onclick="backToEdit()">内容を修正する</button>
+</div>
+
+<!-- 画面下の固定バー -->
+<div class="footer-bar" id="footerBar">
+  <div class="footer-inner">
+    <div class="progress-text" id="progressText">名前を選んでください</div>
+    <button class="submit-btn" id="submitBtn" disabled onclick="submit()">送信する</button>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="staff.js"></script>
+<script>
+/* ============================================================
+   祝日データ
+   優先: holidays-jp API（内閣府データを毎年自動更新している無料API）
+   予備: 下の埋め込みリスト（APIに繋がらない場合に使用）
+   ============================================================ */
+const HOLIDAYS_FALLBACK = {
+  "2026-01-01":"元日","2026-01-12":"成人の日","2026-02-11":"建国記念の日",
+  "2026-02-23":"天皇誕生日","2026-03-20":"春分の日","2026-04-29":"昭和の日",
+  "2026-05-03":"憲法記念日","2026-05-04":"みどりの日","2026-05-05":"こどもの日",
+  "2026-05-06":"振替休日","2026-07-20":"海の日","2026-08-11":"山の日",
+  "2026-09-21":"敬老の日","2026-09-22":"国民の休日","2026-09-23":"秋分の日",
+  "2026-10-12":"スポーツの日","2026-11-03":"文化の日","2026-11-23":"勤労感謝の日",
+  "2027-01-01":"元日","2027-01-11":"成人の日","2027-02-11":"建国記念の日",
+  "2027-02-23":"天皇誕生日","2027-03-21":"春分の日","2027-03-22":"振替休日",
+  "2027-04-29":"昭和の日","2027-05-03":"憲法記念日","2027-05-04":"みどりの日",
+  "2027-05-05":"こどもの日","2027-07-19":"海の日","2027-08-11":"山の日",
+  "2027-09-20":"敬老の日","2027-09-23":"秋分の日","2027-10-11":"スポーツの日",
+  "2027-11-03":"文化の日","2027-11-23":"勤労感謝の日"
+};
+
+/* ============================================================
+   アプリの状態（今どうなっているかを覚えておく変数たち）
+   ============================================================ */
+let settings = null;     // {month, deadline, closed} GASから取得
+let holidays = {};       // {"2026-08-11":"山の日", ...}
+let targetDays = [];     // 対象月の土日祝 [{date, dow, holiday}, ...]
+let answers = {};        // {"2026-08-01":"◎", ...} 入力内容
+let demoMode = false;    // GAS未接続で動かしているか
+
+const MARKS = ["◎","〇","△","×"];
+const DOW_JA = ["日","月","火","水","木","金","土"];
+
+/* ============================================================
+   起動処理
+   ============================================================ */
+init();
+
+async function init(){
+  // --- 祝日を取得（失敗したら埋め込みデータを使う） ---
+  try{
+    const res = await fetch("https://holidays-jp.github.io/api/v1/date.json");
+    holidays = await res.json();
+  }catch(e){
+    holidays = HOLIDAYS_FALLBACK;
+  }
+
+  // --- 設定（対象月・締切）を取得 ---
+  if(!CONFIG.GAS_URL){
+    // デモモード：2026年9月〜12月を切り替えて試せる
+    demoMode = true;
+    settings = { month: "2026-09", deadline: "2026-12-31", closed:false };
+    showBanner("demo", "デモモード（GAS未接続）：送信は保存されません。下のボタンで月を切り替えられます。");
+    renderDemoMonthBar();
+  }else{
+    try{
+      const res = await fetch(CONFIG.GAS_URL + "?action=settings");
+      settings = await res.json();
+      if(!settings.ok) throw new Error(settings.error);
+    }catch(e){
+      showBanner("error", "サーバーに接続できませんでした。時間をおいて再度開いてください。（" + e + "）");
+      document.getElementById("monthTitle").textContent = "接続エラー";
+      return;
+    }
+  }
+
+  // --- ヘッダー表示 ---
+  updateHeader();
+
+  // --- 締切チェック ---
+  if(settings.closed){
+    const [y,m] = settings.month.split("-");
+    document.getElementById("mainArea").classList.add("hidden");
+    document.getElementById("footerBar").classList.add("hidden");
+    document.getElementById("closedScreen").classList.remove("hidden");
+    document.getElementById("closedText").textContent =
+      `${y}年${Number(m)}月分の締切（${fmtDateJa(settings.deadline)}）を過ぎたため、入力できません。管理者にご相談ください。`;
+    return;
+  }
+
+  buildStaffSelect();
+  buildTargetDays();
+  renderDays();
+  updateProgress();
+}
+
+/* ============================================================
+   ヘッダー（対象月・締切）の表示更新
+   ============================================================ */
+function updateHeader(){
+  const [y,m] = settings.month.split("-");
+  document.getElementById("monthTitle").textContent = `${y}年${Number(m)}月分`;
+  document.getElementById("deadlineChip").textContent =
+    demoMode ? "デモ（締切なし）" : "締切 " + fmtDateJa(settings.deadline);
+}
+
+/* ============================================================
+   デモモード専用：月切り替えバー（2026年9〜12月）
+   ============================================================ */
+function renderDemoMonthBar(){
+  const bar = document.getElementById("demoBar");
+  bar.innerHTML = "";
+  ["2026-09","2026-10","2026-11","2026-12"].forEach(mo=>{
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = Number(mo.split("-")[1]) + "月";
+    if(mo === settings.month) b.classList.add("active");
+    b.onclick = ()=>{
+      settings.month = mo;   // 対象月を差し替えて画面を作り直す
+      updateHeader();
+      buildTargetDays();
+      loadDraft();           // 月ごとに下書きが別なので読み直し
+      renderDays();
+      updateProgress();
+      renderDemoMonthBar();  // ボタンの選択表示を更新
+    };
+    bar.appendChild(b);
+  });
+}
+
+/* ============================================================
+   名簿からプルダウンを作る（職種ごとにグループ表示）
+   ============================================================ */
+function buildStaffSelect(){
+  const sel = document.getElementById("staffSelect");
+  ["ST","OT","PT"].forEach(job=>{
+    const grp = document.createElement("optgroup");
+    grp.label = job;
+    STAFF.filter(s=>s.job===job).forEach(s=>{
+      const op = document.createElement("option");
+      op.value = s.id;
+      op.textContent = s.name;
+      grp.appendChild(op);
+    });
+    sel.appendChild(grp);
+  });
+  sel.addEventListener("change", ()=>{
+    loadDraft();      // その人の下書きがあれば復元
+    renderDays();
+    updateProgress();
+  });
+}
+
+/* ============================================================
+   対象月の「土・日・祝日」だけを抜き出す
+   ============================================================ */
+function buildTargetDays(){
+  targetDays = [];
+  const [y,m] = settings.month.split("-").map(Number);
+  const last = new Date(y, m, 0).getDate();   // その月の末日
+  for(let d=1; d<=last; d++){
+    const dt = new Date(y, m-1, d);
+    const dow = dt.getDay();                  // 0=日 … 6=土
+    const key = fmtDate(dt);
+    const holiday = holidays[key] || null;
+    if(dow===0 || dow===6 || holiday){
+      targetDays.push({date:key, day:d, dow:dow, holiday:holiday});
+    }
+  }
+}
+
+/* ============================================================
+   日付リストの描画
+   ============================================================ */
+function renderDays(){
+  const box = document.getElementById("dayList");
+  box.innerHTML = "";
+  targetDays.forEach(t=>{
+    const row = document.createElement("div");
+    row.className = "day-row";
+
+    // 日付ブロック（土=青系 / 日・祝=赤系）
+    const isSun = (t.dow===0 || t.holiday);
+    const db = document.createElement("div");
+    db.className = "date-block " + (isSun ? "is-sun" : "is-sat");
+    db.innerHTML = `<div class="d">${t.day}</div>
+                    <div class="w">${DOW_JA[t.dow]}${t.holiday ? "・祝" : ""}</div>
+                    ${t.holiday ? `<div class="h">${t.holiday}</div>` : ""}`;
+    row.appendChild(db);
+
+    // ◎〇△× ボタン
+    const marks = document.createElement("div");
+    marks.className = "marks";
+    MARKS.forEach(m=>{
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "mark-btn";
+      b.dataset.m = m;
+      b.textContent = m;
+      b.setAttribute("aria-pressed", answers[t.date]===m ? "true":"false");
+      b.setAttribute("aria-label", `${t.day}日を${m}にする`);
+      b.onclick = ()=>{
+        answers[t.date] = m;
+        saveDraft();
+        renderDays();       // 選択状態を描き直す
+        updateProgress();
+      };
+      marks.appendChild(b);
+    });
+    row.appendChild(marks);
+    box.appendChild(row);
+  });
+}
+
+/* ============================================================
+   一括入力ボタン
+   ============================================================ */
+function bulkFill(mark, targetType){
+  targetDays.forEach(t=>{
+    if(targetType==="empty" && !answers[t.date]) answers[t.date]=mark;
+    if(targetType==="sunday" && (t.dow===0 || t.holiday)) answers[t.date]=mark;
+  });
+  saveDraft(); renderDays(); updateProgress();
+}
+function bulkClear(){
+  if(!confirm("入力をすべて消してやり直しますか？")) return;
+  answers = {};
+  saveDraft(); renderDays(); updateProgress();
+}
+
+/* ============================================================
+   進捗表示と送信ボタンの有効/無効
+   ============================================================ */
+function updateProgress(){
+  const staffId = document.getElementById("staffSelect").value;
+  const total = targetDays.length;
+  const filled = targetDays.filter(t=>answers[t.date]).length;
+  const pt = document.getElementById("progressText");
+  const btn = document.getElementById("submitBtn");
+
+  if(!staffId){
+    pt.textContent = "名前を選んでください";
+    pt.classList.remove("done");
+    btn.disabled = true;
+  }else if(filled < total){
+    pt.textContent = `あと ${total-filled} 日ぶん未入力（${filled}/${total}）`;
+    pt.classList.remove("done");
+    btn.disabled = true;
+  }else{
+    pt.textContent = `全 ${total} 日 入力完了！`;
+    pt.classList.add("done");
+    btn.disabled = false;
+  }
+}
+
+/* ============================================================
+   下書き保存（localStorage = 端末内の保存領域）
+   誤ってページを閉じても入力が消えないようにする
+   ============================================================ */
+function draftKey(){
+  const staffId = document.getElementById("staffSelect").value;
+  return `shift_draft_${settings.month}_${staffId}`;
+}
+function saveDraft(){
+  const staffId = document.getElementById("staffSelect").value;
+  if(!staffId) return;
+  localStorage.setItem(draftKey(), JSON.stringify({
+    answers: answers,
+    comment: document.getElementById("comment").value
+  }));
+}
+function loadDraft(){
+  answers = {};
+  const raw = localStorage.getItem(draftKey());
+  if(raw){
+    try{
+      const d = JSON.parse(raw);
+      answers = d.answers || {};
+      document.getElementById("comment").value = d.comment || "";
+    }catch(e){ /* 壊れた下書きは無視 */ }
+  }else{
+    document.getElementById("comment").value = "";
+  }
+}
+document.getElementById("comment").addEventListener("input", saveDraft);
+
+/* ============================================================
+   送信
+   ============================================================ */
+async function submit(){
+  const staffId = document.getElementById("staffSelect").value;
+  const staff = STAFF.find(s=>s.id===staffId);
+  if(!staff) return;
+
+  // 集計を見せて最終確認
+  const c = {"◎":0,"〇":0,"△":0,"×":0};
+  targetDays.forEach(t=>c[answers[t.date]]++);
+  const msg = `${staff.name}（${staff.job}）\n${settings.month.replace("-","年")}月分\n`+
+              `◎${c["◎"]}日 / 〇${c["〇"]}日 / △${c["△"]}日 / ×${c["×"]}日\n\nこの内容で送信しますか？`;
+  if(!confirm(msg)) return;
+
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = true;
+  btn.textContent = "送信中…";
+
+  const payload = {
+    action: "submit",
+    month: settings.month,
+    staffId: staff.id,
+    name: staff.name,
+    job: staff.job,
+    answers: answers,
+    comment: document.getElementById("comment").value.trim()
+  };
+
+  try{
+    let result;
+    if(demoMode){
+      // デモモードでは送信のフリだけする
+      await new Promise(r=>setTimeout(r, 600));
+      result = {ok:true};
+    }else{
+      // Content-Typeを付けずに送るのがGASと通信するときのコツ
+      //（付けると「プリフライト」という追加確認が発生して失敗するため）
+      const res = await fetch(CONFIG.GAS_URL, {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      result = await res.json();
+    }
+
+    if(result.ok){
+      document.getElementById("mainArea").classList.add("hidden");
+      document.getElementById("footerBar").classList.add("hidden");
+      document.getElementById("doneScreen").classList.remove("hidden");
+      window.scrollTo(0,0);
+    }else{
+      showBanner("error", "送信できませんでした：" + (result.error || "不明なエラー"));
+    }
+  }catch(e){
+    showBanner("error", "通信エラーが発生しました。電波の良い場所で再度お試しください。");
+  }finally{
+    btn.disabled = false;
+    btn.textContent = "送信する";
+    updateProgress();
+  }
+}
+
+function backToEdit(){
+  document.getElementById("doneScreen").classList.add("hidden");
+  document.getElementById("mainArea").classList.remove("hidden");
+  document.getElementById("footerBar").classList.remove("hidden");
+}
+
+/* ============================================================
+   小さな道具（ユーティリティ関数）
+   ============================================================ */
+function showBanner(type, text){
+  document.getElementById("bannerArea").innerHTML =
+    `<div class="banner ${type}">${text}</div>`;
+}
+function pad(n){ return String(n).padStart(2,"0"); }
+function fmtDate(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function fmtMonth(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}`; }
+function fmtDateJa(s){  // "2026-07-20" → "7月20日(月)"
+  const [y,m,d] = s.split("-").map(Number);
+  const dt = new Date(y, m-1, d);
+  return `${m}月${d}日(${DOW_JA[dt.getDay()]})`;
+}
+</script>
+</body>
+</html>
