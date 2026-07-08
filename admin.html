@@ -150,19 +150,87 @@ td.total-col{border-left:2px solid var(--border-strong); font-weight:700;}
 .note{font-size:12px; color:var(--sub); margin-top:10px;}
 .hidden{display:none !important;}
 
+/* ---------- 凡例（画面では控えめ、印刷時は表のすぐ上に表示） ---------- */
+.legend-row{
+  display:flex; justify-content:space-between; align-items:center;
+  gap:10px; flex-wrap:wrap; margin-bottom:10px;
+}
+.legend{
+  display:flex; flex-wrap:wrap; gap:6px 18px;
+  font-size:12.5px; color:var(--sub); font-weight:500;
+  padding:8px 12px; flex:1;
+  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  box-shadow:var(--shadow);
+}
+.legend b{font-size:15px; margin-right:2px;}
+.legend .m2{color:var(--m2);} .legend .m1{color:var(--m1);}
+.legend .s1{color:var(--m3);} .legend .b1{color:var(--m4);}
+.legend .assigned-sample{
+  display:inline-block; width:14px; height:14px; background:var(--accent);
+  border-radius:2px; vertical-align:-2px; margin-right:3px;
+}
+.created-at{
+  font-size:12.5px; color:var(--sub); font-weight:600; white-space:nowrap;
+  padding:8px 12px; background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; box-shadow:var(--shadow);
+}
+
 /* ---------- 印刷時：表だけを出す ---------- */
 @media print{
   .toolbar, .info-row, .banner, .note, header .sub{display:none !important;}
   body{padding:0; background:#fff;}
   header{background:#fff; color:#000; box-shadow:none; margin:0; padding:4px 0; border-bottom:1px solid #000;}
+  .legend, .created-at{
+    display:flex !important; box-shadow:none; border:1px solid #000;
+    background:#fff; border-radius:0; font-size:10.5px; padding:5px 8px;
+  }
+  .legend-row{margin-bottom:6px;}
+  .legend .assigned-sample{background:#333 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
   .table-scroll{border:none; overflow:visible; box-shadow:none; border-radius:0;}
   table{width:100%;}
   th,td{font-size:10.5px; padding:2px 3px;}
   td.cell.assigned{background:#333 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
 }
+
+/* ---------- ログイン画面 ---------- */
+#loginScreen{
+  position:fixed; inset:0; background:var(--bg);
+  display:flex; align-items:center; justify-content:center; z-index:100;
+}
+.login-box{
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  box-shadow:var(--shadow); padding:32px 28px; width:100%; max-width:320px; text-align:center;
+}
+.login-box h2{font-size:15px; font-weight:700; color:var(--accent); margin:0 0 18px;}
+.login-box input{
+  width:100%; font-size:20px; letter-spacing:.3em; text-align:center;
+  padding:11px; border:1px solid var(--border-strong); border-radius:6px;
+  font-family:inherit; margin-bottom:12px; box-sizing:border-box;
+}
+.login-box input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(30,58,95,.12);}
+.login-box button{
+  width:100%; background:var(--accent); color:#fff; border:none; border-radius:6px;
+  padding:11px 0; font-size:14.5px; font-weight:700; font-family:inherit; cursor:pointer;
+}
+.login-box button:hover{background:var(--accent-hover);}
+.login-box .err{color:var(--m4); font-size:12.5px; font-weight:600; min-height:18px; margin-top:8px;}
+
+@media print{ #loginScreen{display:none !important;} }
 </style>
 </head>
 <body>
+
+<!-- ログイン画面（パスワードで保護） -->
+<div id="loginScreen">
+  <div class="login-box">
+    <h2>シフト作成ページ（管理者用）</h2>
+    <input type="password" id="loginPw" inputmode="numeric" placeholder="パスワード" autofocus>
+    <button onclick="checkLogin()">開く</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="appRoot" class="hidden">
 
 <header>
   <h1>シフト作成（管理者用）</h1>
@@ -205,6 +273,18 @@ td.total-col{border-left:2px solid var(--border-strong); font-weight:700;}
   <div class="panel" id="unsubmittedPanel"><b>未提出者</b><span id="unsubmittedList">—</span></div>
   <div class="panel" id="commentPanel"><b>コメント</b><div id="commentList">—</div></div>
   <div class="panel warn hidden" id="warnPanel"><b>警告</b><ul id="warnList"></ul></div>
+</div>
+
+<!-- 凡例＋作成日（画面にも表示、印刷にも含まれる） -->
+<div class="legend-row">
+  <div class="legend">
+    <span><b class="m2">◎</b>出勤したい</span>
+    <span><b class="m1">〇</b>出勤できる</span>
+    <span><b class="s1">△</b>できれば避けたい</span>
+    <span><b class="b1">×</b>出勤できない</span>
+    <span><span class="assigned-sample"></span>割り当て済み（出勤）</span>
+  </div>
+  <div class="created-at" id="createdAt">作成日：—</div>
 </div>
 
 <!-- シフト表 -->
@@ -253,10 +333,45 @@ const MARK_CLASS = {"◎":"p-m2","〇":"p-m1","△":"p-m3","×":"p-m4"};
 const PREF_SCORE = {"◎":3,"〇":2,"△":1};   // 自動割り当て時の優先度
 
 /* ============================================================
+   ログイン（画面側の簡易パスワード保護）
+   ------------------------------------------------------------
+   ・正解すると localStorage に印を付け、同じ端末・同じブラウザ
+     なら次回から自動的に入れるようにする（毎回の入力を省く）。
+   ・注意：あくまで「うっかり開き」を防ぐ簡易的な鍵。
+     本気で守りたい情報は置かない前提。
+   ============================================================ */
+const ADMIN_PASSWORD = "525";
+const LOGIN_KEY = "shift_admin_authed";
+
+function checkLogin(){
+  const input = document.getElementById("loginPw").value;
+  if(input === ADMIN_PASSWORD){
+    localStorage.setItem(LOGIN_KEY, "1");
+    unlockApp();
+  }else{
+    document.getElementById("loginErr").textContent = "パスワードが違います";
+    document.getElementById("loginPw").value = "";
+    document.getElementById("loginPw").focus();
+  }
+}
+function unlockApp(){
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("appRoot").classList.remove("hidden");
+  init();  // ロック解除後にはじめてアプリ本体を起動する
+}
+// Enterキーでも送信できるようにする
+document.getElementById("loginPw").addEventListener("keydown", e=>{
+  if(e.key === "Enter") checkLogin();
+});
+
+// 既にログイン済みの端末なら、ログイン画面を出さず即起動
+if(localStorage.getItem(LOGIN_KEY) === "1"){
+  unlockApp();
+}
+
+/* ============================================================
    起動
    ============================================================ */
-init();
-
 async function init(){
   try{
     const res = await fetch("https://holidays-jp.github.io/api/v1/date.json");
@@ -467,6 +582,12 @@ function renderAll(){
   renderPanels();
   document.getElementById("printTitle").textContent =
     month ? month.replace("-","年")+"月分" : "";
+
+  // 作成日＝この画面（表）を今見ている日。印刷するたびに最新の日付になる。
+  const today = new Date();
+  const w = ["日","月","火","水","木","金","土"][today.getDay()];
+  document.getElementById("createdAt").textContent =
+    `作成日：${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日(${w})`;
 }
 
 function renderTable(){
@@ -661,5 +782,8 @@ function showBanner(type, text){
     `<div class="banner ${type}">${text}</div>`;
 }
 </script>
+
+</div><!-- /#appRoot -->
+
 </body>
 </html>

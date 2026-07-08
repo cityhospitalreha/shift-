@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>募集設定（編集者用）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F5F6F8; --surface:#FFFFFF;
+  --border:#E3E6EB; --border-strong:#C7CCD4;
+  --ink:#1B2430; --sub:#68707E;
+  --accent:#1E3A5F; --accent-hover:#274A78;
+  --head-dark:#1B2A40;
+  --err:#C0392B; --ok:#1E8A55;
+  --shadow:0 1px 3px rgba(16,24,40,.07), 0 1px 2px rgba(16,24,40,.04);
+}
+*{box-sizing:border-box;}
+html,body{margin:0; padding:0;}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:'Noto Sans JP','Hiragino Sans',Meiryo,sans-serif;
+  font-size:15px; line-height:1.65; padding-bottom:40px;
+  font-feature-settings:"palt";
+}
+header{
+  background:var(--head-dark); color:#fff;
+  padding:13px 20px; margin-bottom:20px;
+  display:flex; align-items:baseline; gap:14px; box-shadow:var(--shadow);
+}
+header h1{font-size:16.5px; margin:0; font-weight:700; letter-spacing:.05em;}
+header .sub{font-size:12px; color:#9FB0C6;}
+.wrap{max-width:480px; margin:0 auto; padding:0 16px;}
+
+.banner{
+  background:#EDF1F7; color:var(--accent); border:1px solid #D6DEE9;
+  border-radius:6px; padding:9px 13px; font-size:13px; font-weight:600; margin-bottom:14px;
+}
+.banner.error{background:#FDF1EF; color:var(--err); border-color:#F0D5D1;}
+.banner.ok{background:#EDF7F1; color:var(--ok); border-color:#D2E8DC;}
+
+.card{
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; box-shadow:var(--shadow);
+  padding:18px 16px; margin-bottom:14px;
+}
+.card h2{
+  font-size:13px; font-weight:700; letter-spacing:.06em;
+  color:var(--sub); margin:0 0 14px;
+  padding-bottom:8px; border-bottom:1px solid var(--border);
+}
+.field{margin-bottom:14px;}
+.field label{display:block; font-size:13px; font-weight:600; margin-bottom:4px;}
+.field .hint{font-size:11.5px; color:var(--sub); margin-top:3px; line-height:1.5;}
+input{
+  width:100%; font-size:16px; padding:10px 11px;
+  border:1px solid var(--border-strong); border-radius:6px;
+  background:var(--surface); color:var(--ink); font-family:inherit;
+  font-feature-settings:"tnum";
+}
+input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(30,58,95,.12);}
+.row2{display:flex; gap:12px;}
+.row2 .field{flex:1;}
+
+.save-btn{
+  width:100%; background:var(--accent); color:#fff; border:none; border-radius:6px;
+  padding:13px 0; font-size:15.5px; font-weight:700; font-family:inherit;
+  letter-spacing:.04em; box-shadow:var(--shadow); cursor:pointer;
+}
+.save-btn:hover{background:var(--accent-hover);}
+.save-btn:disabled{background:#BEC5CF; box-shadow:none;}
+.hidden{display:none !important;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>募集設定（編集者用）</h1>
+  <span class="sub" id="modeLabel"></span>
+</header>
+
+<div class="wrap">
+  <div id="bannerArea"></div>
+
+  <!-- 募集期間の設定（デモモードでは非表示） -->
+  <div class="card" id="periodCard">
+    <h2>募集期間</h2>
+    <div class="field">
+      <label>対象月</label>
+      <input type="month" id="month">
+      <div class="hint">職員が希望を入力する月。ここを変えると入力アプリの表示月が切り替わります。</div>
+    </div>
+    <div class="field">
+      <label>締切日</label>
+      <input type="date" id="deadline">
+      <div class="hint">この日の23:59まで受付。翌日以降は入力アプリがロックされます。</div>
+    </div>
+  </div>
+
+  <!-- 入力ルール -->
+  <div class="card">
+    <h2>入力ルール</h2>
+    <div class="row2">
+      <div class="field">
+        <label>◎の上限（日）</label>
+        <input type="number" id="maxMaru2" min="0" max="31" value="0">
+      </div>
+      <div class="field">
+        <label>×の上限（日）</label>
+        <input type="number" id="maxBatsu" min="0" max="31" value="0">
+      </div>
+    </div>
+    <div class="hint" style="font-size:12px; color:var(--sub);">
+      0 ＝ 無制限。例：◎上限を3にすると、職員は「出勤したい」を3日までしか選べなくなります。
+      ×上限は「休み希望の出しすぎ」を防ぎたいときに設定します。
+    </div>
+  </div>
+
+  <!-- 保存（実運用モードのみパスワード必要） -->
+  <div class="card">
+    <div class="field" id="pwField">
+      <label>管理パスワード</label>
+      <input type="password" id="password" placeholder="設定シートのE2に入力した値">
+      <div class="hint">Googleスプレッドシート「設定」シートのE2セルに決めたパスワードを入力。</div>
+    </div>
+    <button class="save-btn" id="saveBtn" onclick="save()">保存する</button>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+/* ============================================================
+   編集者ページのしくみ
+   ・実運用：GASから現在の設定を読み込み → 変更 → パスワード付きで
+             POST(setSettings) → GASがシートを書き換える
+   ・デモ　：入力ルールだけ localStorage に保存し、
+             入力アプリ(index.html)のデモモードが読み取る
+   ============================================================ */
+let demoMode = false;
+const DEMO_KEY = "shift_demo_rules";   // index.html と共通の合言葉
+
+init();
+
+async function init(){
+  if(!CONFIG.GAS_URL){
+    // ---- デモモード ----
+    demoMode = true;
+    document.getElementById("modeLabel").textContent = "デモモード";
+    document.getElementById("periodCard").classList.add("hidden");  // 期間はデモでは固定
+    document.getElementById("pwField").classList.add("hidden");     // パスワード不要
+    showBanner("", "デモモード：入力ルールを保存すると、同じ端末で開いた入力アプリ（デモ）に反映されます。");
+
+    // 保存済みのデモルールがあれば表示
+    try{
+      const d = JSON.parse(localStorage.getItem(DEMO_KEY) || "{}");
+      document.getElementById("maxMaru2").value = d.maxMaru2 || 0;
+      document.getElementById("maxBatsu").value = d.maxBatsu || 0;
+    }catch(e){}
+    return;
+  }
+
+  // ---- 実運用モード：現在の設定を読み込んでフォームに反映 ----
+  try{
+    const res = await fetch(CONFIG.GAS_URL + "?action=settings");
+    const s = await res.json();
+    if(!s.ok) throw new Error(s.error);
+    document.getElementById("month").value = s.month;
+    document.getElementById("deadline").value = s.deadline;
+    document.getElementById("maxMaru2").value = s.rules.maxMaru2 || 0;
+    document.getElementById("maxBatsu").value = s.rules.maxBatsu || 0;
+    showBanner("", "現在の設定を読み込みました。変更して保存してください。");
+  }catch(e){
+    showBanner("error", "設定の読み込みに失敗しました：" + e);
+  }
+}
+
+async function save(){
+  const btn = document.getElementById("saveBtn");
+
+  if(demoMode){
+    localStorage.setItem(DEMO_KEY, JSON.stringify({
+      maxMaru2: Number(document.getElementById("maxMaru2").value) || 0,
+      maxBatsu: Number(document.getElementById("maxBatsu").value) || 0
+    }));
+    showBanner("ok", "デモルールを保存しました。入力アプリ（デモ）を再読み込みすると反映されます。");
+    return;
+  }
+
+  const payload = {
+    action: "setSettings",
+    month: document.getElementById("month").value,
+    deadline: document.getElementById("deadline").value,
+    maxMaru2: Number(document.getElementById("maxMaru2").value) || 0,
+    maxBatsu: Number(document.getElementById("maxBatsu").value) || 0,
+    password: document.getElementById("password").value
+  };
+  if(!payload.month || !payload.deadline){
+    showBanner("error", "対象月と締切日を入力してください"); return;
+  }
+  if(!payload.password){
+    showBanner("error", "管理パスワードを入力してください"); return;
+  }
+
+  btn.disabled = true; btn.textContent = "保存中…";
+  try{
+    const res = await fetch(CONFIG.GAS_URL, { method:"POST", body: JSON.stringify(payload) });
+    const result = await res.json();
+    if(result.ok){
+      showBanner("ok", "保存しました。入力アプリに即時反映されます。");
+    }else{
+      showBanner("error", "保存できませんでした：" + result.error);
+    }
+  }catch(e){
+    showBanner("error", "通信エラー：" + e);
+  }finally{
+    btn.disabled = false; btn.textContent = "保存する";
+  }
+}
+
+function showBanner(type, text){
+  document.getElementById("bannerArea").innerHTML =
+    `<div class="banner ${type}">${text}</div>`;
+}
+</script>
+</body>
+</html>

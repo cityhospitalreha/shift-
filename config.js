@@ -1,3 +1,14 @@
+// ============================================================
+// config.js — アプリ全体の設定ファイル
+// ============================================================
+// GAS（Google Apps Script）をデプロイすると発行される
+// 「ウェブアプリのURL」をここに貼り付けます。
+// 例: "https://script.google.com/macros/s/AKfycb.../exec"
+//
+// ★空文字("")のままだと「デモモード」で動きます。
+//   デモモード＝GASに接続せず、画面の動きだけ確認できる状態。
+// ============================================================
+
 const CONFIG = {
-  GAS_URL: "https://script.google.com/macros/s/AKfycby_6vteCD_p5BRU8b6AGpOuKZFXyKb-ChNVKwfzV4UiTIbR1MdWeH7dUhCjjmlaW7vUTg/exec"
+  GAS_URL: "",   // ← ここにGASのウェブアプリURLを貼る（"" で囲んだまま）
 };

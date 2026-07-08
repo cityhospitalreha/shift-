@@ -308,9 +308,21 @@ async function init(){
       const res = await fetch(CONFIG.GAS_URL + "?action=settings");
       settings = await res.json();
       if(!settings.ok) throw new Error(settings.error);
+
+      // --- 受け取った値の形式を検証（ここがNaN/undefined対策の要） ---
+      // サーバー側で正規化済みのはずだが、万一壊れた値が来ても
+      // 「年NaN月分」のような画面には絶対にせず、原因のわかる
+      // エラー表示に倒す。
+      if(!/^\d{4}-\d{2}$/.test(settings.month)){
+        throw new Error(`対象月の形式が不正です（受信値: "${settings.month}"）。スプレッドシート「設定」シートのA2セルを 2026-09 の形式で確認してください`);
+      }
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(settings.deadline)){
+        throw new Error(`締切日の形式が不正です（受信値: "${settings.deadline}"）。スプレッドシート「設定」シートのB2セルを 2026-08-20 の形式で確認してください`);
+      }
     }catch(e){
-      showBanner("error", "サーバーに接続できませんでした。時間をおいて再度開いてください。（" + e + "）");
-      document.getElementById("monthTitle").textContent = "接続エラー";
+      showBanner("error", "設定の読み込みに失敗しました。（" + e.message + "）");
+      document.getElementById("monthTitle").textContent = "設定エラー";
+      document.getElementById("deadlineChip").textContent = "";
       return;
     }
   }
