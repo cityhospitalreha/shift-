@@ -178,6 +178,14 @@ textarea:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rg
 .hidden{display:none !important;}
 
 @media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
+
+/* ---------- 管理者用リンク（控えめ） ---------- */
+.admin-links{
+  text-align:center; padding:6px 0 18px; font-size:11.5px; color:#AEB4BC;
+}
+.admin-links a{color:#8B93A0; text-decoration:none; border-bottom:1px dotted #C7CCD4;}
+.admin-links a:hover{color:var(--accent);}
+.admin-links .sep{margin:0 10px; color:#D5D9DE;}
 </style>
 </head>
 <body>
@@ -224,6 +232,14 @@ textarea:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rg
     <h2><span class="step-num">3</span>連絡事項（任意）</h2>
     <textarea id="comment" placeholder="例）8/15は午前のみ可能です"></textarea>
   </div>
+</div>
+
+<!-- 管理者用リンク（職員はここは使いません。開くにはパスワードが必要） -->
+<div class="admin-links">
+  管理者の方へ（パスワードが必要です）：
+  <a href="settings.html">募集設定</a>
+  <span class="sep">|</span>
+  <a href="admin.html">シフト作成</a>
 </div>
 
 <!-- 締切後の画面 -->

@@ -72,9 +72,44 @@ input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(
 .save-btn:hover{background:var(--accent-hover);}
 .save-btn:disabled{background:#BEC5CF; box-shadow:none;}
 .hidden{display:none !important;}
+
+/* ---------- ログイン画面（admin.htmlと共通の入り口の鍵） ---------- */
+#loginScreen{
+  position:fixed; inset:0; background:var(--bg);
+  display:flex; align-items:center; justify-content:center; z-index:100;
+}
+.login-box{
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  box-shadow:var(--shadow); padding:32px 28px; width:100%; max-width:320px; text-align:center;
+}
+.login-box h2{font-size:15px; font-weight:700; color:var(--accent); margin:0 0 18px;}
+.login-box input{
+  width:100%; font-size:20px; letter-spacing:.3em; text-align:center;
+  padding:11px; border:1px solid var(--border-strong); border-radius:6px;
+  font-family:inherit; margin-bottom:12px; box-sizing:border-box;
+}
+.login-box input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(30,58,95,.12);}
+.login-box button{
+  width:100%; background:var(--accent); color:#fff; border:none; border-radius:6px;
+  padding:11px 0; font-size:14.5px; font-weight:700; font-family:inherit; cursor:pointer;
+}
+.login-box button:hover{background:var(--accent-hover);}
+.login-box .err{color:var(--err); font-size:12.5px; font-weight:600; min-height:18px; margin-top:8px;}
 </style>
 </head>
 <body>
+
+<!-- ログイン画面（ページを開くための入り口の鍵。admin.htmlと共通パスワード） -->
+<div id="loginScreen">
+  <div class="login-box">
+    <h2>募集設定ページ（管理者用）</h2>
+    <input type="password" id="loginPw" inputmode="numeric" placeholder="パスワード" autofocus>
+    <button onclick="checkLogin()">開く</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="appRoot" class="hidden">
 
 <header>
   <h1>募集設定（編集者用）</h1>
@@ -129,8 +164,42 @@ input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(
   </div>
 </div>
 
+</div><!-- /#appRoot -->
+
 <script src="config.js"></script>
 <script>
+/* ============================================================
+   ログイン（画面側の簡易パスワード保護。admin.htmlと共通の考え方）
+   ・「開くための鍵」と「保存するための鍵」は別物。
+     開く鍵はここで固定のパスワードをチェックするだけ。
+     保存する鍵はスプレッドシートE2の値とGAS側で照合する（本物の認証）。
+   ============================================================ */
+const ENTRY_PASSWORD = "525";
+const LOGIN_KEY = "shift_settings_authed";
+
+function checkLogin(){
+  const input = document.getElementById("loginPw").value;
+  if(input === ENTRY_PASSWORD){
+    localStorage.setItem(LOGIN_KEY, "1");
+    unlockApp();
+  }else{
+    document.getElementById("loginErr").textContent = "パスワードが違います";
+    document.getElementById("loginPw").value = "";
+    document.getElementById("loginPw").focus();
+  }
+}
+function unlockApp(){
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("appRoot").classList.remove("hidden");
+  init();
+}
+document.getElementById("loginPw").addEventListener("keydown", e=>{
+  if(e.key === "Enter") checkLogin();
+});
+if(localStorage.getItem(LOGIN_KEY) === "1"){
+  unlockApp();
+}
+
 /* ============================================================
    編集者ページのしくみ
    ・実運用：GASから現在の設定を読み込み → 変更 → パスワード付きで
@@ -140,8 +209,6 @@ input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(
    ============================================================ */
 let demoMode = false;
 const DEMO_KEY = "shift_demo_rules";   // index.html と共通の合言葉
-
-init();
 
 async function init(){
   if(!CONFIG.GAS_URL){
