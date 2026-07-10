@@ -10,5 +10,5 @@
 // ============================================================
 
 const CONFIG = {
-  GAS_URL: "",   // ← ここにGASのウェブアプリURLを貼る（"" で囲んだまま）
+  GAS_URL: "https://script.google.com/macros/s/AKfycbyvaMQSGoUl9FRNuBjNC8Mls3L0IWWf9wk3-kgZg4x1PbiK6ONU-iAZg9Bqofg1D8fUzw/exec",   // ← ここにGASのウェブアプリURLを貼る（"" で囲んだまま）
 };
