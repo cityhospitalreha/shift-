@@ -122,12 +122,21 @@ input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(
   <!-- 募集期間の設定（デモモードでは非表示） -->
   <div class="card" id="periodCard">
     <h2>募集期間</h2>
-    <div class="field">
-      <label>対象月</label>
-      <input type="month" id="month">
-      <div class="hint">職員が希望を入力する月。ここを変えると入力アプリの表示月が切り替わります。</div>
+    <div class="row2">
+      <div class="field">
+        <label>開始月</label>
+        <input type="month" id="monthFrom">
+      </div>
+      <div class="field">
+        <label>終了月</label>
+        <input type="month" id="monthTo">
+      </div>
     </div>
-    <div class="field">
+    <div class="hint">
+      職員が希望を入力する期間。開始月と終了月を同じにすれば今まで通り単月の募集になります。
+      例：開始月=2026-09、終了月=2026-11 とすると、9〜11月分をまとめて1回のアンケートで聞けます。
+    </div>
+    <div class="field" style="margin-top:14px;">
       <label>締切日</label>
       <input type="date" id="deadline">
       <div class="hint">この日の23:59まで受付。翌日以降は入力アプリがロックされます。</div>
@@ -140,18 +149,19 @@ input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(
     <div class="row2">
       <div class="field">
         <label>◎の上限（日）</label>
-        <input type="number" id="maxMaru2" min="0" max="31" value="0">
+        <input type="number" id="maxMaru2" min="0" max="93" value="0">
       </div>
       <div class="field">
         <label>×の上限（日）</label>
-        <input type="number" id="maxBatsu" min="0" max="31" value="0">
+        <input type="number" id="maxBatsu" min="0" max="93" value="0">
       </div>
     </div>
     <div class="hint" style="font-size:12px; color:var(--sub);">
-      0 ＝ 無制限。例：◎上限を3にすると、職員は「出勤したい」を3日までしか選べなくなります。
-      ×上限は「休み希望の出しすぎ」を防ぎたいときに設定します。
+      0 ＝ 無制限。複数月まとめて募集する場合、この上限は<b>期間全体を通しての合計日数</b>です。
+      例：3ヶ月分をまとめて聞く場合、◎上限を3にすると3ヶ月間で合計3日までになります（各月3日ずつではありません）。
     </div>
   </div>
+
 
   <!-- 保存（実運用モードのみパスワード必要） -->
   <div class="card">
@@ -233,7 +243,8 @@ async function init(){
     const res = await fetch(CONFIG.GAS_URL + "?action=settings");
     const s = await res.json();
     if(!s.ok) throw new Error(s.error);
-    document.getElementById("month").value = s.month;
+    document.getElementById("monthFrom").value = s.monthFrom;
+    document.getElementById("monthTo").value = s.monthTo;
     document.getElementById("deadline").value = s.deadline;
     document.getElementById("maxMaru2").value = s.rules.maxMaru2 || 0;
     document.getElementById("maxBatsu").value = s.rules.maxBatsu || 0;
@@ -255,16 +266,23 @@ async function save(){
     return;
   }
 
+  const monthFrom = document.getElementById("monthFrom").value;
+  const monthTo = document.getElementById("monthTo").value || monthFrom;
+
   const payload = {
     action: "setSettings",
-    month: document.getElementById("month").value,
+    monthFrom: monthFrom,
+    monthTo: monthTo,
     deadline: document.getElementById("deadline").value,
     maxMaru2: Number(document.getElementById("maxMaru2").value) || 0,
     maxBatsu: Number(document.getElementById("maxBatsu").value) || 0,
     password: document.getElementById("password").value
   };
-  if(!payload.month || !payload.deadline){
-    showBanner("error", "対象月と締切日を入力してください"); return;
+  if(!payload.monthFrom || !payload.deadline){
+    showBanner("error", "開始月と締切日を入力してください"); return;
+  }
+  if(monthTo < monthFrom){
+    showBanner("error", "終了月は開始月と同じか、それより後の月にしてください"); return;
   }
   if(!payload.password){
     showBanner("error", "管理パスワードを入力してください"); return;

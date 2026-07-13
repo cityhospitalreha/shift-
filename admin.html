@@ -243,8 +243,10 @@ td.total-col{border-left:2px solid var(--border-strong); font-weight:700;}
 <!-- ツールバー -->
 <div class="toolbar">
   <div class="group">
-    <label>対象月</label>
-    <input type="month" id="monthInput">
+    <label>開始月</label>
+    <input type="month" id="monthFromInput">
+    <label>〜終了月</label>
+    <input type="month" id="monthToInput">
     <button onclick="loadMonth()">読み込み</button>
   </div>
   <div class="group" id="demoGenGroup" style="display:none">
@@ -261,6 +263,7 @@ td.total-col{border-left:2px solid var(--border-strong); font-weight:700;}
   <div class="group">
     <button class="primary" onclick="autoAssign()">自動割り当て</button>
     <button onclick="clearAssign()">割り当てクリア</button>
+    <button id="undoBtn" onclick="undoAssign()" disabled>元に戻す</button>
   </div>
   <div class="group">
     <button onclick="copyTsv()">表をコピー</button>
@@ -322,8 +325,10 @@ const HOLIDAYS_FALLBACK = {
    ============================================================ */
 let demoMode = false;
 let holidays = {};
-let month = "";          // "2026-09"
-let targetDays = [];     // [{date,day,dow,holiday}]
+let month = "";          // その回を識別する合言葉（＝開始月と同じ）
+let monthFrom = "";      // "2026-09"
+let monthTo = "";        // "2026-12"（単月の場合はmonthFromと同じ）
+let targetDays = [];     // [{date,day,dow,holiday,month}]
 let responses = {};      // staffId → {answers, comment, sentAt}
 let req = {};            // date → 必要人数
 let assignment = {};     // date → {staffId:true}
@@ -382,16 +387,18 @@ async function init(){
     demoMode = true;
     document.getElementById("modeLabel").textContent = "デモモード（GAS未接続）";
     document.getElementById("demoGenGroup").style.display = "";
-    document.getElementById("monthInput").value = "2026-09";
-    showBanner("", "デモモード：「デモデータ生成」を押すと職員A〜Uの希望がランダムに作られます。");
+    document.getElementById("monthFromInput").value = "2026-09";
+    document.getElementById("monthToInput").value = "2026-12";
+    showBanner("", "デモモード：9月〜12月の4ヶ月分で表示しています。「デモデータ生成」を押すと職員A〜Uの希望がランダムに作られます。");
     loadMonth();
   }else{
-    // GASから現在の募集設定を取得して、その月を初期表示
+    // GASから現在の募集設定を取得して、その期間を初期表示
     try{
       const res = await fetch(CONFIG.GAS_URL + "?action=settings");
       const s = await res.json();
       if(!s.ok) throw new Error(s.error);
-      document.getElementById("monthInput").value = s.month;
+      document.getElementById("monthFromInput").value = s.monthFrom;
+      document.getElementById("monthToInput").value = s.monthTo;
       await loadMonth();
     }catch(e){
       showBanner("error", "サーバーに接続できませんでした：" + e);
@@ -400,11 +407,16 @@ async function init(){
 }
 
 /* ============================================================
-   月の読み込み：対象日を作り、回答と保存済みの作業状態を復元
+   期間の読み込み：対象日を作り、回答と保存済みの作業状態を復元
    ============================================================ */
 async function loadMonth(){
-  month = document.getElementById("monthInput").value;
-  if(!month){ alert("対象月を選んでください"); return; }
+  monthFrom = document.getElementById("monthFromInput").value;
+  monthTo = document.getElementById("monthToInput").value || monthFrom;
+  if(!monthFrom){ alert("開始月を選んでください"); return; }
+  if(monthTo < monthFrom){ alert("終了月は開始月と同じか、それより後にしてください"); return; }
+
+  // 保存・復元のキーは「開始月」を、その回を識別する合言葉として使う
+  month = monthFrom;
 
   buildTargetDays();
 
@@ -424,22 +436,35 @@ async function loadMonth(){
   }
   // （デモモードでは「デモデータ生成」ボタンで responses を作る）
 
-  restoreState();   // この月の必要人数・割り当てを端末から復元
+  restoreState();   // この期間の必要人数・割り当てを端末から復元
   renderAll();
+}
+
+function nextMonthStr(ym){
+  const [y,m] = ym.split("-").map(Number);
+  const d = new Date(y, m, 1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
 }
 
 function buildTargetDays(){
   targetDays = [];
-  const [y,m] = month.split("-").map(Number);
-  const last = new Date(y, m, 0).getDate();
-  for(let d=1; d<=last; d++){
-    const dt = new Date(y, m-1, d);
-    const dow = dt.getDay();
-    const key = `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-    const holiday = holidays[key] || null;
-    if(dow===0 || dow===6 || holiday){
-      targetDays.push({date:key, day:d, dow:dow, holiday:holiday});
+  let cur = monthFrom;
+  let guard = 0;
+
+  while(cur <= monthTo && guard < 24){
+    const [y,m] = cur.split("-").map(Number);
+    const last = new Date(y, m, 0).getDate();
+    for(let d=1; d<=last; d++){
+      const dt = new Date(y, m-1, d);
+      const dow = dt.getDay();
+      const key = `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      const holiday = holidays[key] || null;
+      if(dow===0 || dow===6 || holiday){
+        targetDays.push({date:key, day:d, dow:dow, holiday:holiday, month:cur});
+      }
     }
+    cur = nextMonthStr(cur);
+    guard++;
   }
 }
 
@@ -488,6 +513,14 @@ function genDemoData(){
    3. ×の人、未提出の人、（設定ONなら）前日・翌日に勤務がある人は除外
    ============================================================ */
 function autoAssign(){
+  // 既に何か割り当てがある状態で実行すると上書きされてしまうため、
+  // うっかり事故を防ぐための確認ダイアログ。
+  const hasExisting = Object.keys(assignment).some(d => Object.keys(assignment[d]).length > 0);
+  if(hasExisting && !confirm("現在の割り当てを上書きして、自動で組み直します。よろしいですか？\n（「元に戻す」で1回分だけ戻せます）")) {
+    return;
+  }
+  pushHistory();  // 上書きする直前の状態を1つ保存しておく
+
   assignment = {};
   const counts = {};   // staffId → 割り当て回数
   STAFF.forEach(s=>counts[s.id]=0);
@@ -551,9 +584,49 @@ function hasAdjacentAssign(staffId, date){
 }
 
 function clearAssign(){
-  if(!confirm("割り当てをすべて解除しますか？（希望データは消えません）")) return;
+  if(!confirm("割り当てをすべて解除しますか？（希望データは消えません。「元に戻す」で1回分だけ戻せます）")) return;
+  pushHistory();
   assignment = {};
   saveState(); renderAll();
+}
+
+/* ============================================================
+   元に戻す（1手だけ）
+   ------------------------------------------------------------
+   ・「自動割り当て」「割り当てクリア」を実行する直前の状態を
+     1つだけ履歴に保存しておき、ボタン1つで復元できるようにする。
+   ・履歴は月ごとに端末へ保存されるので、ページを閉じても
+     直前の1回分は残る（ただし新しい上書きが起きると更新される）。
+   ============================================================ */
+let assignHistory = null;   // {req, assignment} の直前スナップショット
+
+function pushHistory(){
+  // JSON.parse(JSON.stringify(...)) で「値のコピー」を作る。
+  // 単に代入するだけだと同じデータを指す「参照」になってしまい、
+  // 後から書き換えると過去の記録まで一緒に変わってしまうため。
+  assignHistory = {
+    req: JSON.parse(JSON.stringify(req)),
+    assignment: JSON.parse(JSON.stringify(assignment))
+  };
+  if(month) localStorage.setItem("shift_admin_undo_"+month, JSON.stringify(assignHistory));
+  document.getElementById("undoBtn").disabled = false;
+}
+
+function undoAssign(){
+  if(!assignHistory){
+    alert("戻せる操作がありません");
+    return;
+  }
+  if(!confirm("直前の状態に戻します。今の内容は失われます。よろしいですか？")) return;
+
+  req = JSON.parse(JSON.stringify(assignHistory.req));
+  assignment = JSON.parse(JSON.stringify(assignHistory.assignment));
+  assignHistory = null;
+  document.getElementById("undoBtn").disabled = true;
+  if(month) localStorage.removeItem("shift_admin_undo_"+month);
+
+  saveState();
+  renderAll();
 }
 
 /* ============================================================
@@ -577,11 +650,23 @@ function toggleCell(staffId, date){
 /* ============================================================
    画面描画
    ============================================================ */
+function periodLabel(){
+  if(!monthFrom) return "";
+  const [yFrom, mFrom] = monthFrom.split("-");
+  const [yTo, mTo] = (monthTo || monthFrom).split("-");
+  if(monthFrom === monthTo || !monthTo){
+    return `${yFrom}年${Number(mFrom)}月分`;
+  }
+  if(yFrom === yTo){
+    return `${yFrom}年${Number(mFrom)}月〜${Number(mTo)}月分`;
+  }
+  return `${yFrom}年${Number(mFrom)}月〜${yTo}年${Number(mTo)}月分`;
+}
+
 function renderAll(){
   renderTable();
   renderPanels();
-  document.getElementById("printTitle").textContent =
-    month ? month.replace("-","年")+"月分" : "";
+  document.getElementById("printTitle").textContent = periodLabel();
 
   // 作成日＝この画面（表）を今見ている日。印刷するたびに最新の日付になる。
   const today = new Date();
@@ -600,9 +685,11 @@ function renderTable(){
 
   const tr1 = document.createElement("tr");
   tr1.innerHTML = `<th class="col-name">職員</th>`;
+  const spansMultiple = monthFrom !== monthTo;
   targetDays.forEach(t=>{
     const isSun = (t.dow===0 || t.holiday);
-    tr1.innerHTML += `<th class="${isSun?"date-sun":"date-sat"}">${t.day}(${DOW_JA[t.dow]})`+
+    const dayLabel = spansMultiple ? `${Number(t.month.split("-")[1])}/${t.day}` : `${t.day}`;
+    tr1.innerHTML += `<th class="${isSun?"date-sun":"date-sat"}">${dayLabel}(${DOW_JA[t.dow]})`+
                      `${t.holiday?`<span class="holiday">${t.holiday}</span>`:""}</th>`;
   });
   tr1.innerHTML += `<th class="total-col">計</th>`;
@@ -745,14 +832,23 @@ function saveState(){
 function restoreState(){
   req = {}; assignment = {};
   const raw = localStorage.getItem("shift_admin_"+month);
-  if(!raw) return;
-  try{
-    const d = JSON.parse(raw);
-    req = d.req || {};
-    assignment = d.assignment || {};
-    document.getElementById("ruleConsecutive").checked = d.rule !== false;
-    if(demoMode && d.demoResponses) responses = d.demoResponses;
-  }catch(e){ /* 壊れた保存は無視 */ }
+  if(raw){
+    try{
+      const d = JSON.parse(raw);
+      req = d.req || {};
+      assignment = d.assignment || {};
+      document.getElementById("ruleConsecutive").checked = d.rule !== false;
+      if(demoMode && d.demoResponses) responses = d.demoResponses;
+    }catch(e){ /* 壊れた保存は無視 */ }
+  }
+
+  // この月の「元に戻す」履歴が端末に残っていれば復元する
+  assignHistory = null;
+  const undoRaw = localStorage.getItem("shift_admin_undo_"+month);
+  if(undoRaw){
+    try{ assignHistory = JSON.parse(undoRaw); }catch(e){ assignHistory = null; }
+  }
+  document.getElementById("undoBtn").disabled = !assignHistory;
 }
 
 /* ============================================================

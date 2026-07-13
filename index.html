@@ -98,6 +98,14 @@ select:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba
   padding:10px 0; border-bottom:1px solid var(--border);
 }
 .day-row:last-child{border-bottom:none;}
+
+/* 複数月の範囲になっている場合の「◯月」見出し */
+.month-divider{
+  font-size:12.5px; font-weight:700; color:var(--accent);
+  background:var(--accent); background:#EDF1F7;
+  padding:5px 10px; border-radius:4px; margin:12px 0 4px;
+}
+.month-divider:first-child{margin-top:0;}
 .date-block{min-width:74px; text-align:center; padding:2px 4px;}
 .date-block .d{
   font-weight:700; font-size:20px; line-height:1.15;
@@ -200,7 +208,6 @@ textarea:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rg
 
 <div class="wrap" id="mainArea">
   <div id="bannerArea"></div>
-  <div id="demoBar" class="demo-bar"></div>
 
   <!-- STEP1 名前 -->
   <div class="card">
@@ -312,25 +319,25 @@ async function init(){
     holidays = HOLIDAYS_FALLBACK;
   }
 
-  // --- 設定（対象月・締切）を取得 ---
+  // --- 設定（対象期間・締切）を取得 ---
   if(!CONFIG.GAS_URL){
-    // デモモード：2026年9月〜12月を切り替えて試せる
+    // デモモード：2026年9月〜12月の4ヶ月分をまとめて表示する
+    // （複数月の範囲設定を体験できるよう、最初から範囲ありの状態にしてある）
     demoMode = true;
-    settings = { month: "2026-09", deadline: "2026-12-31", closed:false };
-    showBanner("demo", "デモモード（GAS未接続）：送信は保存されません。下のボタンで月を切り替えられます。");
-    renderDemoMonthBar();
+    settings = { monthFrom: "2026-09", monthTo: "2026-12", deadline: "2026-12-31", closed:false };
+    showBanner("demo", "デモモード（GAS未接続）：送信は保存されません。9月〜12月の4ヶ月分をまとめて表示しています。");
   }else{
     try{
       const res = await fetch(CONFIG.GAS_URL + "?action=settings");
       settings = await res.json();
       if(!settings.ok) throw new Error(settings.error);
 
-      // --- 受け取った値の形式を検証（ここがNaN/undefined対策の要） ---
-      // サーバー側で正規化済みのはずだが、万一壊れた値が来ても
-      // 「年NaN月分」のような画面には絶対にせず、原因のわかる
-      // エラー表示に倒す。
-      if(!/^\d{4}-\d{2}$/.test(settings.month)){
-        throw new Error(`対象月の形式が不正です（受信値: "${settings.month}"）。スプレッドシート「設定」シートのA2セルを 2026-09 の形式で確認してください`);
+      // --- 受け取った値の形式を検証（NaN/undefined対策） ---
+      if(!/^\d{4}-\d{2}$/.test(settings.monthFrom)){
+        throw new Error(`開始月の形式が不正です（受信値: "${settings.monthFrom}"）。スプレッドシート「設定」シートのA2セルを 2026-09 の形式で確認してください`);
+      }
+      if(!/^\d{4}-\d{2}$/.test(settings.monthTo)){
+        throw new Error(`終了月の形式が不正です（受信値: "${settings.monthTo}"）。スプレッドシート「設定」シートのF2セルを確認してください`);
       }
       if(!/^\d{4}-\d{2}-\d{2}$/.test(settings.deadline)){
         throw new Error(`締切日の形式が不正です（受信値: "${settings.deadline}"）。スプレッドシート「設定」シートのB2セルを 2026-08-20 の形式で確認してください`);
@@ -348,12 +355,11 @@ async function init(){
 
   // --- 締切チェック ---
   if(settings.closed){
-    const [y,m] = settings.month.split("-");
     document.getElementById("mainArea").classList.add("hidden");
     document.getElementById("footerBar").classList.add("hidden");
     document.getElementById("closedScreen").classList.remove("hidden");
     document.getElementById("closedText").textContent =
-      `${y}年${Number(m)}月分の締切（${fmtDateJa(settings.deadline)}）を過ぎたため、入力できません。管理者にご相談ください。`;
+      `${periodLabel()}の締切（${fmtDateJa(settings.deadline)}）を過ぎたため、入力できません。管理者にご相談ください。`;
     return;
   }
 
@@ -364,37 +370,30 @@ async function init(){
 }
 
 /* ============================================================
-   ヘッダー（対象月・締切）の表示更新
+   対象期間の文字列表示（単月／複数月の両方に対応）
+   例: monthFrom=monthTo → "2026年9月分"
+       年をまたぐ場合   → "2026年9月〜2027年2月分"
+       同じ年の範囲     → "2026年9月〜11月分"
    ============================================================ */
-function updateHeader(){
-  const [y,m] = settings.month.split("-");
-  document.getElementById("monthTitle").textContent = `${y}年${Number(m)}月分`;
-  document.getElementById("deadlineChip").textContent =
-    demoMode ? "デモ（締切なし）" : "締切 " + fmtDateJa(settings.deadline);
+function periodLabel(){
+  const [yFrom, mFrom] = settings.monthFrom.split("-");
+  const [yTo, mTo] = settings.monthTo.split("-");
+  if(settings.monthFrom === settings.monthTo){
+    return `${yFrom}年${Number(mFrom)}月分`;
+  }
+  if(yFrom === yTo){
+    return `${yFrom}年${Number(mFrom)}月〜${Number(mTo)}月分`;
+  }
+  return `${yFrom}年${Number(mFrom)}月〜${yTo}年${Number(mTo)}月分`;
 }
 
 /* ============================================================
-   デモモード専用：月切り替えバー（2026年9〜12月）
+   ヘッダー（対象期間・締切）の表示更新
    ============================================================ */
-function renderDemoMonthBar(){
-  const bar = document.getElementById("demoBar");
-  bar.innerHTML = "";
-  ["2026-09","2026-10","2026-11","2026-12"].forEach(mo=>{
-    const b = document.createElement("button");
-    b.type = "button";
-    b.textContent = Number(mo.split("-")[1]) + "月";
-    if(mo === settings.month) b.classList.add("active");
-    b.onclick = ()=>{
-      settings.month = mo;   // 対象月を差し替えて画面を作り直す
-      updateHeader();
-      buildTargetDays();
-      loadDraft();           // 月ごとに下書きが別なので読み直し
-      renderDays();
-      updateProgress();
-      renderDemoMonthBar();  // ボタンの選択表示を更新
-    };
-    bar.appendChild(b);
-  });
+function updateHeader(){
+  document.getElementById("monthTitle").textContent = periodLabel();
+  document.getElementById("deadlineChip").textContent =
+    demoMode ? "デモ（締切なし）" : "締切 " + fmtDateJa(settings.deadline);
 }
 
 /* ============================================================
@@ -421,20 +420,36 @@ function buildStaffSelect(){
 }
 
 /* ============================================================
-   対象月の「土・日・祝日」だけを抜き出す
+   "YYYY-MM" の月を1つ進める（年またぎも正しく計算される）
+   ============================================================ */
+function nextMonthStr(ym){
+  const [y,m] = ym.split("-").map(Number);
+  const d = new Date(y, m, 1);  // mは1始まりのまま渡すと、Dateが自動で翌月1日にしてくれる
+  return fmtMonth(d);
+}
+
+/* ============================================================
+   対象期間（開始月〜終了月）に含まれる「土・日・祝日」を全部抜き出す
    ============================================================ */
 function buildTargetDays(){
   targetDays = [];
-  const [y,m] = settings.month.split("-").map(Number);
-  const last = new Date(y, m, 0).getDate();   // その月の末日
-  for(let d=1; d<=last; d++){
-    const dt = new Date(y, m-1, d);
-    const dow = dt.getDay();                  // 0=日 … 6=土
-    const key = fmtDate(dt);
-    const holiday = holidays[key] || null;
-    if(dow===0 || dow===6 || holiday){
-      targetDays.push({date:key, day:d, dow:dow, holiday:holiday});
+  let cur = settings.monthFrom;
+  let guard = 0;   // 万一の設定ミスで無限ループにならないための安全装置
+
+  while(cur <= settings.monthTo && guard < 24){
+    const [y,m] = cur.split("-").map(Number);
+    const last = new Date(y, m, 0).getDate();   // その月の末日
+    for(let d=1; d<=last; d++){
+      const dt = new Date(y, m-1, d);
+      const dow = dt.getDay();
+      const key = fmtDate(dt);
+      const holiday = holidays[key] || null;
+      if(dow===0 || dow===6 || holiday){
+        targetDays.push({date:key, day:d, dow:dow, holiday:holiday, month:cur});
+      }
     }
+    cur = nextMonthStr(cur);
+    guard++;
   }
 }
 
@@ -444,7 +459,21 @@ function buildTargetDays(){
 function renderDays(){
   const box = document.getElementById("dayList");
   box.innerHTML = "";
+
+  // 複数月にまたがる場合だけ、月が変わるところに見出しを挟む
+  const spansMultiple = settings.monthFrom !== settings.monthTo;
+  let lastMonth = null;
+
   targetDays.forEach(t=>{
+    if(spansMultiple && t.month !== lastMonth){
+      const [yy, mm] = t.month.split("-");
+      const header = document.createElement("div");
+      header.className = "month-divider";
+      header.textContent = `${Number(mm)}月`;
+      box.appendChild(header);
+      lastMonth = t.month;
+    }
+
     const row = document.createElement("div");
     row.className = "day-row";
 
@@ -528,7 +557,7 @@ function updateProgress(){
    ============================================================ */
 function draftKey(){
   const staffId = document.getElementById("staffSelect").value;
-  return `shift_draft_${settings.month}_${staffId}`;
+  return `shift_draft_${settings.monthFrom}_${staffId}`;
 }
 function saveDraft(){
   const staffId = document.getElementById("staffSelect").value;
@@ -564,7 +593,7 @@ async function submit(){
   // 集計を見せて最終確認
   const c = {"◎":0,"〇":0,"△":0,"×":0};
   targetDays.forEach(t=>c[answers[t.date]]++);
-  const msg = `${staff.name}（${staff.job}）\n${settings.month.replace("-","年")}月分\n`+
+  const msg = `${staff.name}（${staff.job}）\n${periodLabel()}\n`+
               `◎${c["◎"]}日 / 〇${c["〇"]}日 / △${c["△"]}日 / ×${c["×"]}日\n\nこの内容で送信しますか？`;
   if(!confirm(msg)) return;
 
@@ -574,7 +603,7 @@ async function submit(){
 
   const payload = {
     action: "submit",
-    month: settings.month,
+    month: settings.monthFrom,   // その回の識別子として「開始月」を送る
     staffId: staff.id,
     name: staff.name,
     job: staff.job,
