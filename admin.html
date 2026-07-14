@@ -186,7 +186,10 @@ td.total-col{border-left:2px solid var(--border-strong); font-weight:700;}
   border-radius:8px; box-shadow:var(--shadow);
 }
 
-/* ---------- 印刷時：表だけを出す ---------- */
+/* ---------- 印刷専用エリア：画面では常に非表示 ---------- */
+.print-only{display:none;}
+
+/* ---------- 印刷時：月ごとに分けた表だけを出す ---------- */
 @media print{
   .toolbar, .info-row, .banner, .note, header .sub{display:none !important;}
   body{padding:0; background:#fff;}
@@ -197,10 +200,20 @@ td.total-col{border-left:2px solid var(--border-strong); font-weight:700;}
   }
   .legend-row{margin-bottom:6px;}
   .legend .assigned-sample{background:#333 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
-  .table-scroll{border:none; overflow:visible; box-shadow:none; border-radius:0;}
-  table{width:100%;}
-  th,td{font-size:10.5px; padding:2px 3px;}
-  td.cell.assigned{background:#333 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+
+  /* 画面用の横長テーブルは印刷しない（右側が切れる原因になるため） */
+  .table-scroll{display:none !important;}
+
+  /* 代わりに、月ごとに分けた印刷専用エリアだけを表示する */
+  .print-only{display:block !important;}
+  .print-month-block{page-break-after:always;}
+  .print-month-block:last-child{page-break-after:auto;}
+  .print-month-title{
+    font-size:13px; font-weight:700; margin:10px 0 4px; color:#000;
+  }
+  #printArea table{width:100%; border-collapse:collapse;}
+  #printArea th, #printArea td{font-size:10.5px; padding:2px 3px;}
+  #printArea td.cell.assigned{background:#333 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
 }
 
 /* ---------- ログイン画面 ---------- */
@@ -269,6 +282,13 @@ td.total-col{border-left:2px solid var(--border-strong); font-weight:700;}
     <button onclick="applyDefaultReq()">全日に反映</button>
   </div>
   <div class="group">
+    <label>土</label>
+    <input type="number" id="reqSat" value="5" min="0" max="21" style="width:44px;">
+    <label>日・祝</label>
+    <input type="number" id="reqSun" value="3" min="0" max="21" style="width:44px;">
+    <button onclick="applyWeekdayPattern()">曜日パターンで反映</button>
+  </div>
+  <div class="group">
     <label><input type="checkbox" id="ruleConsecutive" checked onchange="saveState();renderAll()"> 連続勤務させない</label>
   </div>
   <div class="group">
@@ -278,7 +298,7 @@ td.total-col{border-left:2px solid var(--border-strong); font-weight:700;}
   </div>
   <div class="group">
     <button onclick="copyTsv()">表をコピー</button>
-    <button onclick="window.print()">印刷</button>
+    <button onclick="doPrint()">印刷</button>
   </div>
   <div class="group">
     <button onclick="saveBackup()">バックアップ保存</button>
@@ -310,14 +330,17 @@ td.total-col{border-left:2px solid var(--border-strong); font-weight:700;}
   <div class="created-at" id="createdAt">作成日：—</div>
 </div>
 
-<!-- シフト表 -->
+<!-- シフト表（画面表示用） -->
 <div class="table-scroll">
   <table id="shiftTable"></table>
 </div>
 <p class="note">
   セルをクリック（タップ）すると出勤の割り当て／解除ができます。黒＝出勤。
-  「自動割り当て」は ×以外の人から、◎＞〇＞△ の優先度と回数の公平さを考慮して選びます。実行するたびに組み直されます。
+  「自動割り当て」は ×以外の人から選びます。◎の希望は必ず〇より優先され、同じ記号どうしの中でだけ割り当て回数の少ない人が優先されます。実行するたびに組み直されます。
 </p>
+
+<!-- シフト表（印刷専用：月ごとに分けたページ区切り版。画面には出さない） -->
+<div id="printArea" class="print-only"></div>
 
 <!-- 他ページへのリンク -->
 <div class="admin-links">
@@ -358,6 +381,7 @@ let monthFrom = "";      // "2026-09"
 let monthTo = "";        // "2026-12"（単月の場合はmonthFromと同じ）
 let targetDays = [];     // [{date,day,dow,holiday,month}]
 let responses = {};      // staffId → {answers, comment, sentAt}
+let excludedIds = new Set();  // 今回の期だけ対象外にした職員ID
 let req = {};            // date → 必要人数
 let assignment = {};     // date → {staffId:true}
 
@@ -365,7 +389,7 @@ const DOW_JA = ["日","月","火","水","木","金","土"];
 const MARK_CLASS = {"◎":"p-m2","〇":"p-m1","△":"p-m3","×":"p-m4"};
 // 画面の隅に表示する目印。ファイルを差し替えたら、この文字も変える。
 // 差し替えたはずなのに古い表示のままなら、ブラウザのキャッシュが原因と分かる。
-const APP_VERSION = "2026-07-13a";
+const APP_VERSION = "2026-07-14a";
 const PREF_SCORE = {"◎":3,"〇":2,"△":1};   // 自動割り当て時の優先度
 
 /* ============================================================
@@ -433,6 +457,7 @@ async function init(){
       if(!s.ok) throw new Error(s.error);
       document.getElementById("monthFromInput").value = s.monthFrom;
       document.getElementById("monthToInput").value = s.monthTo;
+      excludedIds = new Set(s.excludedStaffIds || []);
       await loadMonth();
     }catch(e){
       showBanner("error", "サーバーに接続できませんでした：" + e);
@@ -573,6 +598,7 @@ function autoAssign(){
 
     const cands = STAFF
       .filter(s=>{
+        if(excludedIds.has(s.id)) return false;     // 今回対象外の職員は除外
         const r = responses[s.id];
         if(!r) return false;                        // 未提出
         const mark = r.answers[t.date];
@@ -580,13 +606,19 @@ function autoAssign(){
         if(ruleOn && hasAdjacentAssign(s.id, t.date)) return false; // 連続禁止
         return true;
       })
-      .map(s=>({
-        id: s.id,
-        score: PREF_SCORE[responses[s.id].answers[t.date]]*10
-               - counts[s.id]*7
-               + Math.random()*3
-      }))
-      .sort((a,b)=>b.score - a.score);
+      .map(s=>{
+        const mark = responses[s.id].answers[t.date];
+        return {
+          id: s.id,
+          // tier：◎＞〇＞△ を絶対に守る優先順位（ここが同点にならない限り、
+          //       割り当て回数の多い少ないでは絶対にひっくり返らない）
+          tier: PREF_SCORE[mark],
+          // fair：同じ記号どうしの中でだけ、回数の少ない人を優先する
+          //       （公平さの調整はtierが同じ人の間だけで働く）
+          fair: -counts[s.id]*7 + Math.random()*3
+        };
+      })
+      .sort((a,b)=> (b.tier - a.tier) || (b.fair - a.fair));
 
     cands.slice(0, need).forEach(c=>{
       assignment[t.date][c.id] = true;
@@ -600,6 +632,7 @@ function autoAssign(){
 
 function eligibleCount(date){
   return STAFF.filter(s=>{
+    if(excludedIds.has(s.id)) return false;
     const r = responses[s.id];
     return r && r.answers[date] && r.answers[date] !== "×";
   }).length;
@@ -671,7 +704,9 @@ function toggleCell(staffId, date){
   const assigned = assignment[date] && assignment[date][staffId];
 
   if(!assigned){
-    if(!r && !confirm("この職員は未提出です。割り当てますか？")) return;
+    if(excludedIds.has(staffId)){
+      if(!confirm("この職員は今回「対象外」に設定されています。それでも例外的にこの日だけ割り当てますか？")) return;
+    }else if(!r && !confirm("この職員は未提出です。割り当てますか？")) return;
     if(r && r.answers[date]==="×" && !confirm("この日は「×（出勤できない）」の希望です。割り当てますか？")) return;
     assignment[date] = assignment[date] || {};
     assignment[date][staffId] = true;
@@ -713,78 +748,115 @@ function renderTable(){
   const tbl = document.getElementById("shiftTable");
   tbl.innerHTML = "";
   if(targetDays.length===0) return;
+  tbl.innerHTML = buildTableHTML(targetDays);
+}
 
-  // ---- 見出し3行（日付／必要人数／充足状況） ----
-  const thead = document.createElement("thead");
-
-  const tr1 = document.createElement("tr");
-  tr1.innerHTML = `<th class="col-name">職員</th>`;
+// ------------------------------------------------------------
+// 表のHTMLを組み立てる共通関数
+// ------------------------------------------------------------
+// days に渡した日付だけを対象に、見出し3行＋職種ごとの職員行を作る。
+// 画面表示（全日ぶん）と、印刷用（月ごとに分けた部分表）の
+// 両方からこの1つの関数を呼び出して使い回している。
+function buildTableHTML(days){
+  if(days.length===0) return "";
   const spansMultiple = monthFrom !== monthTo;
-  targetDays.forEach(t=>{
+
+  // ---- 見出し3行 ----
+  let tr1 = `<tr><th class="col-name">職員</th>`;
+  days.forEach(t=>{
     const isSun = (t.dow===0 || t.holiday);
     const dayLabel = spansMultiple ? `${Number(t.month.split("-")[1])}/${t.day}` : `${t.day}`;
-    tr1.innerHTML += `<th class="${isSun?"date-sun":"date-sat"}">${dayLabel}(${DOW_JA[t.dow]})`+
-                     `${t.holiday?`<span class="holiday">${t.holiday}</span>`:""}</th>`;
+    tr1 += `<th class="${isSun?"date-sun":"date-sat"}">${dayLabel}(${DOW_JA[t.dow]})`+
+           `${t.holiday?`<span class="holiday">${t.holiday}</span>`:""}</th>`;
   });
-  tr1.innerHTML += `<th class="total-col">計</th>`;
-  thead.appendChild(tr1);
+  tr1 += `<th class="total-col">計</th></tr>`;
 
-  const tr2 = document.createElement("tr");
-  tr2.innerHTML = `<th class="col-name">必要人数</th>`;
-  targetDays.forEach(t=>{
+  let tr2 = `<tr><th class="col-name">必要人数</th>`;
+  days.forEach(t=>{
     const v = req[t.date] ?? "";
-    tr2.innerHTML += `<td class="req-cell"><input type="number" min="0" max="21" value="${v}"
-                       onchange="setReq('${t.date}', this.value)"></td>`;
+    tr2 += `<td class="req-cell"><input type="number" min="0" max="21" value="${v}"
+             onchange="setReq('${t.date}', this.value)"></td>`;
   });
-  tr2.innerHTML += `<td class="total-col">—</td>`;
-  thead.appendChild(tr2);
+  tr2 += `<td class="total-col">—</td></tr>`;
 
-  const tr3 = document.createElement("tr");
-  tr3.innerHTML = `<th class="col-name">割当/必要</th>`;
-  targetDays.forEach(t=>{
+  let tr3 = `<tr><th class="col-name">割当/必要</th>`;
+  days.forEach(t=>{
     const n = countAssigned(t.date);
     const need = req[t.date] ?? 0;
     const ok = n >= need;
-    tr3.innerHTML += `<td class="${ok?"status-ok":"status-short"}">${n}/${need}</td>`;
+    tr3 += `<td class="${ok?"status-ok":"status-short"}">${n}/${need}</td>`;
   });
-  tr3.innerHTML += `<td class="total-col">—</td>`;
-  thead.appendChild(tr3);
-  tbl.appendChild(thead);
+  tr3 += `<td class="total-col">—</td></tr>`;
+
+  const thead = `<thead>${tr1}${tr2}${tr3}</thead>`;
 
   // ---- 本体：職種ごとにグループ表示 ----
-  const tbody = document.createElement("tbody");
+  let tbody = "<tbody>";
   ["ST","OT","PT"].forEach(job=>{
-    const trh = document.createElement("tr");
-    trh.className = "job-head";
-    trh.innerHTML = `<td class="col-name">${job}</td><td colspan="${targetDays.length+1}"></td>`;
-    tbody.appendChild(trh);
+    tbody += `<tr class="job-head"><td class="col-name">${job}</td><td colspan="${days.length+1}"></td></tr>`;
 
     STAFF.filter(s=>s.job===job).forEach(s=>{
       const r = responses[s.id];
-      const tr = document.createElement("tr");
-      if(!r) tr.className = "unsubmitted";
-
-      let html = `<td class="col-name">${s.name}${r?"":`<span class="job">未提出</span>`}</td>`;
+      const isExcluded = excludedIds.has(s.id);
+      const tag = isExcluded ? `<span class="job">対象外</span>` : (r ? "" : `<span class="job">未提出</span>`);
+      let row = `<tr class="${r?"":"unsubmitted"}"><td class="col-name">${s.name}${tag}</td>`;
       let myCount = 0;
 
-      targetDays.forEach(t=>{
+      days.forEach(t=>{
         const mark = r ? (r.answers[t.date] || "") : "";
         const assigned = assignment[t.date] && assignment[t.date][s.id];
         if(assigned) myCount++;
-        // ×なのに割り当て、または連続勤務は赤枠で知らせる
         const bad = assigned && (mark==="×" ||
                     (document.getElementById("ruleConsecutive").checked && hasAdjacentAssignExcl(s.id, t.date)));
-        html += `<td class="cell ${assigned?"assigned":""} ${bad?"violation":""}"
-                     onclick="toggleCell('${s.id}','${t.date}')">`+
-                `<span class="${MARK_CLASS[mark]||"p-none"}">${mark || "―"}</span></td>`;
+        row += `<td class="cell ${assigned?"assigned":""} ${bad?"violation":""}"
+                    onclick="toggleCell('${s.id}','${t.date}')">`+
+               `<span class="${MARK_CLASS[mark]||"p-none"}">${mark || "―"}</span></td>`;
       });
 
-      html += `<td class="total-col">${myCount}</td>`;
-      tr.innerHTML = html;
-      tbody.appendChild(tr);
+      row += `<td class="total-col">${myCount}</td></tr>`;
+      tbody += row;
     });
   });
-  tbl.appendChild(tbody);
+  tbody += "</tbody>";
+
+  return thead + tbody;
+}
+
+/* ============================================================
+   印刷用：月ごとに表を分けて、複数ページに渡って印刷する
+   ------------------------------------------------------------
+   画面上の1つの横長テーブルをそのまま印刷すると、日数が多い時に
+   右側が用紙からはみ出て切れてしまう。そこで印刷の直前に、
+   月ごとの「小さな表」を複数作って、ページ区切りを入れて並べる。
+   ============================================================ */
+function buildPrintArea(){
+  const area = document.getElementById("printArea");
+  if(targetDays.length===0){ area.innerHTML = ""; return; }
+
+  // 月ごとにグループ分け
+  const byMonth = {};
+  const order = [];
+  targetDays.forEach(t=>{
+    if(!byMonth[t.month]){ byMonth[t.month] = []; order.push(t.month); }
+    byMonth[t.month].push(t);
+  });
+
+  let html = "";
+  order.forEach((mo, i)=>{
+    const [y,m] = mo.split("-");
+    const isLast = (i === order.length - 1);
+    html += `<div class="print-month-block" style="${isLast?'':'page-break-after:always;'}">`+
+            `<div class="print-month-title">${y}年${Number(m)}月分</div>`+
+            `<table>${buildTableHTML(byMonth[mo])}</table>`+
+            `</div>`;
+  });
+  area.innerHTML = html;
+}
+
+function doPrint(){
+  buildPrintArea();
+  // 表の描画（DOM反映）が終わるのを一呼吸待ってから印刷ダイアログを開く
+  setTimeout(()=>window.print(), 50);
 }
 
 // 連続チェック（表示用）：この日を除いた隣接日を確認
@@ -799,8 +871,8 @@ function hasAdjacentAssignExcl(staffId, date){
 }
 
 function renderPanels(){
-  // 未提出者
-  const un = STAFF.filter(s=>!responses[s.id]).map(s=>`${s.name}(${s.job})`);
+  // 未提出者（今回対象外にした職員は除く）
+  const un = STAFF.filter(s=>!excludedIds.has(s.id) && !responses[s.id]).map(s=>`${s.name}(${s.job})`);
   document.getElementById("unsubmittedList").textContent =
     un.length ? un.join("、") : "なし（全員提出済み）";
 
@@ -849,6 +921,23 @@ function applyDefaultReq(){
   const v = Number(document.getElementById("defaultReq").value) || 0;
   targetDays.forEach(t=>req[t.date]=v);
   saveState(); renderAll();
+}
+
+// ------------------------------------------------------------
+// 曜日パターンで一括反映
+// ------------------------------------------------------------
+// 「土曜は◯人、日曜・祝日は◯人」という決まりを1回入力するだけで、
+// 対象期間の全日（半年分でも）に自動で振り分ける。個別に例外がある日は
+// この後、表の該当セルだけ手動で数字を書き換えればよい。
+function applyWeekdayPattern(){
+  const sat = Number(document.getElementById("reqSat").value) || 0;
+  const sun = Number(document.getElementById("reqSun").value) || 0;
+  targetDays.forEach(t=>{
+    const isSun = (t.dow===0 || t.holiday);
+    req[t.date] = isSun ? sun : sat;
+  });
+  saveState(); renderAll();
+  showBanner("", `曜日パターンを反映しました（土曜=${sat}人、日曜・祝日=${sun}人）。個別の例外は表の数字を直接書き換えてください。`);
 }
 
 /* ============================================================
@@ -1027,6 +1116,7 @@ async function purgeArchive(){
     showBanner("error", "通信エラー：" + e);
   }
 }
+
 </script>
 
 </div><!-- /#appRoot -->
