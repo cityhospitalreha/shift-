@@ -148,6 +148,17 @@ td.status-short{color:var(--m4); font-weight:700; background:var(--warn-bg);}
 td.total-col{border-left:2px solid var(--border-strong); font-weight:700;}
 
 .note{font-size:12px; color:var(--sub); margin-top:10px;}
+
+/* ---------- 他ページへのリンク・バージョン表示 ---------- */
+.admin-links{
+  text-align:center; padding:18px 0 4px; font-size:12px; color:#AEB4BC;
+}
+.admin-links a{color:#8B93A0; text-decoration:none; border-bottom:1px dotted #C7CCD4;}
+.admin-links a:hover{color:var(--accent);}
+.admin-links .sep{margin:0 10px; color:#D5D9DE;}
+.version-footer{
+  text-align:center; padding:2px 0 20px; font-size:10.5px; color:#C7CCD4;
+}
 .hidden{display:none !important;}
 
 /* ---------- 凡例（画面では控えめ、印刷時は表のすぐ上に表示） ---------- */
@@ -269,6 +280,15 @@ td.total-col{border-left:2px solid var(--border-strong); font-weight:700;}
     <button onclick="copyTsv()">表をコピー</button>
     <button onclick="window.print()">印刷</button>
   </div>
+  <div class="group">
+    <button onclick="saveBackup()">バックアップ保存</button>
+    <button onclick="document.getElementById('backupFile').click()">バックアップ読込</button>
+    <input type="file" id="backupFile" accept="application/json" style="display:none" onchange="loadBackup(event)">
+  </div>
+  <div class="group" id="archiveGroup" style="display:none">
+    <button onclick="archiveResponses()">この期間をアーカイブして削除</button>
+    <button onclick="purgeArchive()">アーカイブを完全に削除</button>
+  </div>
 </div>
 
 <!-- 未提出者・警告 -->
@@ -298,6 +318,14 @@ td.total-col{border-left:2px solid var(--border-strong); font-weight:700;}
   セルをクリック（タップ）すると出勤の割り当て／解除ができます。黒＝出勤。
   「自動割り当て」は ×以外の人から、◎＞〇＞△ の優先度と回数の公平さを考慮して選びます。実行するたびに組み直されます。
 </p>
+
+<!-- 他ページへのリンク -->
+<div class="admin-links">
+  <a href="index.html">職員入力画面</a>
+  <span class="sep">|</span>
+  <a href="settings.html">募集設定</a>
+</div>
+<div class="version-footer" id="versionFooter"></div>
 
 <script src="config.js"></script>
 <script src="staff.js"></script>
@@ -335,6 +363,9 @@ let assignment = {};     // date → {staffId:true}
 
 const DOW_JA = ["日","月","火","水","木","金","土"];
 const MARK_CLASS = {"◎":"p-m2","〇":"p-m1","△":"p-m3","×":"p-m4"};
+// 画面の隅に表示する目印。ファイルを差し替えたら、この文字も変える。
+// 差し替えたはずなのに古い表示のままなら、ブラウザのキャッシュが原因と分かる。
+const APP_VERSION = "2026-07-13a";
 const PREF_SCORE = {"◎":3,"〇":2,"△":1};   // 自動割り当て時の優先度
 
 /* ============================================================
@@ -378,6 +409,8 @@ if(localStorage.getItem(LOGIN_KEY) === "1"){
    起動
    ============================================================ */
 async function init(){
+  document.getElementById("versionFooter").textContent = "app version: " + APP_VERSION;
+
   try{
     const res = await fetch("https://holidays-jp.github.io/api/v1/date.json");
     holidays = await res.json();
@@ -392,6 +425,7 @@ async function init(){
     showBanner("", "デモモード：9月〜12月の4ヶ月分で表示しています。「デモデータ生成」を押すと職員A〜Uの希望がランダムに作られます。");
     loadMonth();
   }else{
+    document.getElementById("archiveGroup").style.display = "";  // 本番接続時のみアーカイブ操作を表示
     // GASから現在の募集設定を取得して、その期間を初期表示
     try{
       const res = await fetch(CONFIG.GAS_URL + "?action=settings");
@@ -876,6 +910,122 @@ function copyTsv(){
 function showBanner(type, text){
   document.getElementById("bannerArea").innerHTML =
     `<div class="banner ${type}">${text}</div>`;
+}
+
+/* ============================================================
+   バックアップの書き出し／読み込み
+   ------------------------------------------------------------
+   ・今の作業内容（対象期間・必要人数・割り当て）を1つのファイルに
+     まとめて、端末に保存できるようにする。
+   ・その端末に何かあっても、このファイルさえあれば復元できる保険。
+   ============================================================ */
+function saveBackup(){
+  const backup = {
+    savedAt: new Date().toISOString(),
+    monthFrom: monthFrom,
+    monthTo: monthTo,
+    req: req,
+    assignment: assignment
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `shift_backup_${monthFrom}_${nowStamp()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showBanner("", "バックアップを保存しました。ダウンロードフォルダをご確認ください。");
+}
+
+function loadBackup(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const backup = JSON.parse(reader.result);
+      if(!backup.monthFrom){ throw new Error("バックアップファイルの形式が正しくありません"); }
+      if(!confirm(`${backup.monthFrom}〜${backup.monthTo || backup.monthFrom} のバックアップ（保存日時: ${backup.savedAt}）を読み込みます。今の内容は上書きされます。よろしいですか？`)) return;
+
+      document.getElementById("monthFromInput").value = backup.monthFrom;
+      document.getElementById("monthToInput").value = backup.monthTo || backup.monthFrom;
+      monthFrom = backup.monthFrom;
+      monthTo = backup.monthTo || backup.monthFrom;
+      month = monthFrom;
+      req = backup.req || {};
+      assignment = backup.assignment || {};
+
+      buildTargetDays();
+      saveState();
+      renderAll();
+      showBanner("ok", "バックアップを読み込みました。");
+    }catch(e){
+      showBanner("error", "読み込みに失敗しました：" + e.message);
+    }
+  };
+  reader.readAsText(file);
+  ev.target.value = "";   // 同じファイルを連続で選んでも読み込めるようにリセット
+}
+
+function nowStamp(){
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
+}
+
+/* ============================================================
+   アーカイブ（古い回答データの整理）
+   ------------------------------------------------------------
+   ・締切が過ぎて使い終わった期間の回答を「回答_アーカイブ」シートへ
+     移動し、メインの「回答」シートを軽く保つ。
+   ・実際にスプレッドシートを書き換える操作なので、管理パスワード
+     （E2の値）による確認を必須にしている。
+   ============================================================ */
+async function archiveResponses(){
+  if(demoMode){ alert("デモモードではアーカイブ操作はできません"); return; }
+  if(!confirm(`今表示している期間（${monthFrom}）の回答を「回答_アーカイブ」シートへ移動し、元のシートから削除します。よろしいですか？`)) return;
+
+  const password = prompt("管理パスワードを入力してください（スプレッドシート設定シートE2の値）");
+  if(password === null) return;
+
+  try{
+    const res = await fetch(CONFIG.GAS_URL, {
+      method: "POST",
+      body: JSON.stringify({ action:"archiveResponses", month: monthFrom, password: password })
+    });
+    const result = await res.json();
+    if(result.ok){
+      showBanner("ok", result.message);
+      await loadMonth();  // 表を最新状態に読み直す（回答が空になっているはず）
+    }else{
+      showBanner("error", "アーカイブに失敗しました：" + result.error);
+    }
+  }catch(e){
+    showBanner("error", "通信エラー：" + e);
+  }
+}
+
+async function purgeArchive(){
+  if(demoMode){ alert("デモモードではアーカイブ操作はできません"); return; }
+  if(!confirm("「回答_アーカイブ」シートの中身を完全に削除します。この操作は取り消せません。本当によろしいですか？")) return;
+  if(!confirm("念のためもう一度確認します。本当にアーカイブを完全に削除しますか？")) return;
+
+  const password = prompt("管理パスワードを入力してください（スプレッドシート設定シートE2の値）");
+  if(password === null) return;
+
+  try{
+    const res = await fetch(CONFIG.GAS_URL, {
+      method: "POST",
+      body: JSON.stringify({ action:"purgeArchive", password: password })
+    });
+    const result = await res.json();
+    if(result.ok){
+      showBanner("ok", result.message);
+    }else{
+      showBanner("error", "削除に失敗しました：" + result.error);
+    }
+  }catch(e){
+    showBanner("error", "通信エラー：" + e);
+  }
 }
 </script>
 

@@ -72,6 +72,15 @@ input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(
 .save-btn:hover{background:var(--accent-hover);}
 .save-btn:disabled{background:#BEC5CF; box-shadow:none;}
 .hidden{display:none !important;}
+.admin-links{
+  text-align:center; padding:18px 0 4px; font-size:12px; color:#AEB4BC;
+}
+.admin-links a{color:#8B93A0; text-decoration:none; border-bottom:1px dotted #C7CCD4;}
+.admin-links a:hover{color:var(--accent);}
+.admin-links .sep{margin:0 10px; color:#D5D9DE;}
+.version-footer{
+  text-align:center; padding:2px 0 12px; font-size:10.5px; color:#C7CCD4;
+}
 
 /* ---------- ログイン画面（admin.htmlと共通の入り口の鍵） ---------- */
 #loginScreen{
@@ -172,6 +181,13 @@ input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(
     </div>
     <button class="save-btn" id="saveBtn" onclick="save()">保存する</button>
   </div>
+
+  <div class="admin-links">
+    <a href="index.html">職員入力画面</a>
+    <span class="sep">|</span>
+    <a href="admin.html">シフト作成</a>
+  </div>
+  <div class="version-footer" id="versionFooter"></div>
 </div>
 
 </div><!-- /#appRoot -->
@@ -221,6 +237,9 @@ let demoMode = false;
 const DEMO_KEY = "shift_demo_rules";   // index.html と共通の合言葉
 
 async function init(){
+  const APP_VERSION = "2026-07-13a";
+  document.getElementById("versionFooter").textContent = "app version: " + APP_VERSION;
+
   if(!CONFIG.GAS_URL){
     // ---- デモモード ----
     demoMode = true;

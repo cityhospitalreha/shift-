@@ -84,6 +84,17 @@ select:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba
 .legend .s1{color:var(--m3);} .legend .b1{color:var(--m4);}
 
 /* ---------- 一括ボタン ---------- */
+/* ---------- ◎×の上限カウンター ---------- */
+.limit-counter{
+  display:flex; gap:14px; flex-wrap:wrap;
+  font-size:12.5px; font-weight:700; margin-bottom:10px;
+}
+.limit-counter .chip{
+  padding:3px 10px; border-radius:999px; background:#F0F2F5; color:var(--sub);
+}
+.limit-counter .chip.over{background:#FDF1EF; color:var(--sun);}
+.limit-counter .chip.full{background:#EDF7F1; color:var(--m2);}
+
 .bulk{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;}
 .bulk button{
   border:1px solid var(--border-strong); background:var(--surface); color:var(--ink);
@@ -194,9 +205,73 @@ textarea:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rg
 .admin-links a{color:#8B93A0; text-decoration:none; border-bottom:1px dotted #C7CCD4;}
 .admin-links a:hover{color:var(--accent);}
 .admin-links .sep{margin:0 10px; color:#D5D9DE;}
+.version-footer{
+  text-align:center; padding:2px 0 16px; font-size:10.5px; color:#C7CCD4;
+}
+
+/* ---------- 名前選択ゲート（最初に必ず通る画面） ---------- */
+#nameGate{
+  position:fixed; inset:0; background:var(--bg); z-index:80;
+  display:flex; align-items:center; justify-content:center; padding:20px;
+}
+.name-box{
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  box-shadow:var(--shadow); padding:32px 26px; width:100%; max-width:360px; text-align:center;
+}
+.name-box h2{font-size:16px; font-weight:700; color:var(--accent); margin:0 0 6px;}
+.name-box p{font-size:13px; color:var(--sub); margin:0 0 18px;}
+.name-box select{margin-bottom:16px;}
+.name-box button{
+  width:100%; background:var(--accent); color:#fff; border:none; border-radius:6px;
+  padding:12px 0; font-size:15px; font-weight:700; font-family:inherit; cursor:pointer;
+}
+.name-box button:disabled{background:#BEC5CF;}
+
+/* 入力画面上部の「入力者」表示バー */
+.current-staff{
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  box-shadow:var(--shadow); padding:10px 14px; margin-bottom:14px; font-size:14px;
+}
+.current-staff b{color:var(--accent);}
+.current-staff a{color:var(--sub); font-size:12.5px; text-decoration:underline; cursor:pointer;}
+
+/* 送信完了画面の確認表（スクリーンショット向けのコンパクトなグリッド） */
+.result-grid{
+  display:grid; grid-template-columns:repeat(5, 1fr); gap:3px 4px; margin:14px 0;
+}
+.result-cell{
+  background:var(--surface); border:1px solid var(--border); border-radius:4px;
+  padding:2px 3px; text-align:center; font-size:10.5px; line-height:1.35; white-space:nowrap;
+}
+.result-cell .rd{font-weight:600;}
+.result-cell .rd.sat{color:var(--sat);}
+.result-cell .rd.sun{color:var(--sun);}
+.result-cell .rm{display:block; font-weight:700; font-size:13px;}
+.result-cell .rm.m2{color:var(--m2);}
+.result-cell .rm.m1{color:var(--m1);}
+.result-cell .rm.m3{color:var(--m3);}
+.result-cell .rm.m4{color:var(--m4);}
+.result-cell .rm.none{color:#C7CCD4;}
+.screenshot-hint{
+  font-size:12.5px; color:var(--accent); background:#EDF1F7;
+  border-radius:6px; padding:8px 12px; margin-top:6px; font-weight:600;
+}
 </style>
 </head>
 <body>
+
+<!-- 名前選択ゲート：最初に必ずここを通る -->
+<div id="nameGate">
+  <div class="name-box">
+    <h2>まず、あなたの名前を選んでください</h2>
+    <p>他の人の名前を選ばないようご注意ください</p>
+    <select id="staffSelect">
+      <option value="">-- 選択してください --</option>
+    </select>
+    <button type="button" id="gateNextBtn" disabled onclick="confirmName()">この名前で進む</button>
+  </div>
+</div>
 
 <header>
   <div class="wrap">
@@ -206,26 +281,25 @@ textarea:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rg
   </div>
 </header>
 
-<div class="wrap" id="mainArea">
+<div class="wrap hidden" id="mainArea">
   <div id="bannerArea"></div>
 
-  <!-- STEP1 名前 -->
-  <div class="card">
-    <h2><span class="step-num">1</span>名前を選ぶ</h2>
-    <select id="staffSelect">
-      <option value="">-- 選択してください --</option>
-    </select>
+  <!-- 入力者表示バー -->
+  <div class="current-staff">
+    <span>入力者：<b id="currentStaffName">未選択</b></span>
+    <a onclick="reopenGate()">名前を変更する</a>
   </div>
 
-  <!-- STEP2 希望入力 -->
+  <!-- 希望入力 -->
   <div class="card">
-    <h2><span class="step-num">2</span>各日の希望をタップ</h2>
+    <h2><span class="step-num">1</span>各日の希望をタップ</h2>
     <div class="legend" style="margin-bottom:12px;">
       <span><b class="m2">◎</b> 出勤したい</span>
       <span><b class="m1">〇</b> 出勤できる</span>
       <span><b class="s1">△</b> できれば避けたい</span>
       <span><b class="b1">×</b> 出勤できない</span>
     </div>
+    <div id="limitCounter" class="limit-counter"></div>
     <div class="bulk">
       <button type="button" onclick="bulkFill('〇', 'empty')">未入力を全部〇</button>
       <button type="button" onclick="bulkFill('×', 'sunday')">日曜・祝日を全部×</button>
@@ -236,7 +310,7 @@ textarea:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rg
 
   <!-- STEP3 コメント -->
   <div class="card">
-    <h2><span class="step-num">3</span>連絡事項（任意）</h2>
+    <h2><span class="step-num">2</span>連絡事項（任意）</h2>
     <textarea id="comment" placeholder="例）8/15は午前のみ可能です"></textarea>
   </div>
 </div>
@@ -248,6 +322,7 @@ textarea:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rg
   <span class="sep">|</span>
   <a href="admin.html">シフト作成</a>
 </div>
+<div class="version-footer" id="versionFooter"></div>
 
 <!-- 締切後の画面 -->
 <div class="screen hidden" id="closedScreen">
@@ -258,12 +333,13 @@ textarea:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rg
 <!-- 送信完了画面 -->
 <div class="screen hidden" id="doneScreen">
   <div class="big">送信を受け付けました</div>
-  <p>希望を受け付けました。<br>締切までは何度でも修正・再送信できます。<br>（最後に送った内容が有効になります）</p>
+  <p id="doneSummary">希望を受け付けました。<br>締切までは何度でも修正・再送信できます。<br>（最後に送った内容が有効になります）</p>
+  <div id="resultTableWrap" style="text-align:left;"></div>
   <button type="button" onclick="backToEdit()">内容を修正する</button>
 </div>
 
 <!-- 画面下の固定バー -->
-<div class="footer-bar" id="footerBar">
+<div class="footer-bar hidden" id="footerBar">
   <div class="footer-inner">
     <div class="progress-text" id="progressText">名前を選んでください</div>
     <button class="submit-btn" id="submitBtn" disabled onclick="submit()">送信する</button>
@@ -304,6 +380,8 @@ let demoMode = false;    // GAS未接続で動かしているか
 
 const MARKS = ["◎","〇","△","×"];
 const DOW_JA = ["日","月","火","水","木","金","土"];
+// 画面の隅に表示する目印。ファイルを差し替えたら、この文字も変える。
+const APP_VERSION = "2026-07-13a";
 
 /* ============================================================
    起動処理
@@ -311,6 +389,8 @@ const DOW_JA = ["日","月","火","水","木","金","土"];
 init();
 
 async function init(){
+  document.getElementById("versionFooter").textContent = "app version: " + APP_VERSION;
+
   // --- 祝日を取得（失敗したら埋め込みデータを使う） ---
   try{
     const res = await fetch("https://holidays-jp.github.io/api/v1/date.json");
@@ -324,7 +404,13 @@ async function init(){
     // デモモード：2026年9月〜12月の4ヶ月分をまとめて表示する
     // （複数月の範囲設定を体験できるよう、最初から範囲ありの状態にしてある）
     demoMode = true;
-    settings = { monthFrom: "2026-09", monthTo: "2026-12", deadline: "2026-12-31", closed:false };
+    // settings.htmlのデモで保存したルール（◎×上限）があれば読み込む
+    let demoRules = { maxMaru2: 0, maxBatsu: 0 };
+    try{
+      const d = JSON.parse(localStorage.getItem("shift_demo_rules") || "{}");
+      demoRules = { maxMaru2: Number(d.maxMaru2)||0, maxBatsu: Number(d.maxBatsu)||0 };
+    }catch(e){}
+    settings = { monthFrom: "2026-09", monthTo: "2026-12", deadline: "2026-12-31", closed:false, rules: demoRules };
     showBanner("demo", "デモモード（GAS未接続）：送信は保存されません。9月〜12月の4ヶ月分をまとめて表示しています。");
   }else{
     try{
@@ -355,6 +441,7 @@ async function init(){
 
   // --- 締切チェック ---
   if(settings.closed){
+    document.getElementById("nameGate").classList.add("hidden");
     document.getElementById("mainArea").classList.add("hidden");
     document.getElementById("footerBar").classList.add("hidden");
     document.getElementById("closedScreen").classList.remove("hidden");
@@ -365,8 +452,6 @@ async function init(){
 
   buildStaffSelect();
   buildTargetDays();
-  renderDays();
-  updateProgress();
 }
 
 /* ============================================================
@@ -398,6 +483,10 @@ function updateHeader(){
 
 /* ============================================================
    名簿からプルダウンを作る（職種ごとにグループ表示）
+   ------------------------------------------------------------
+   ここでは「次へ」ボタンの有効/無効を切り替えるだけにしておき、
+   実際の画面切り替えは confirmName() が確認ダイアログを
+   経てから行う（誤タップでいきなり進んでしまうのを防ぐため）。
    ============================================================ */
 function buildStaffSelect(){
   const sel = document.getElementById("staffSelect");
@@ -413,10 +502,35 @@ function buildStaffSelect(){
     sel.appendChild(grp);
   });
   sel.addEventListener("change", ()=>{
-    loadDraft();      // その人の下書きがあれば復元
-    renderDays();
-    updateProgress();
+    document.getElementById("gateNextBtn").disabled = !sel.value;
   });
+}
+
+/* ============================================================
+   名前確定：ここを通ってはじめて入力画面が開く
+   ============================================================ */
+function confirmName(){
+  const staffId = document.getElementById("staffSelect").value;
+  const staff = STAFF.find(s=>s.id===staffId);
+  if(!staff) return;
+  if(!confirm(`あなたは「${staff.name}」さんですか？\n間違いなければOKを押してください。`)) return;
+
+  document.getElementById("nameGate").classList.add("hidden");
+  document.getElementById("mainArea").classList.remove("hidden");
+  document.getElementById("footerBar").classList.remove("hidden");
+  document.getElementById("currentStaffName").textContent = `${staff.name}（${staff.job}）`;
+
+  loadDraft();
+  renderDays();
+  updateProgress();
+  updateLimitCounter();
+}
+
+/* ============================================================
+   「名前を変更する」：もう一度ゲート画面を出す
+   ============================================================ */
+function reopenGate(){
+  document.getElementById("nameGate").classList.remove("hidden");
 }
 
 /* ============================================================
@@ -498,16 +612,60 @@ function renderDays(){
       b.setAttribute("aria-pressed", answers[t.date]===m ? "true":"false");
       b.setAttribute("aria-label", `${t.day}日を${m}にする`);
       b.onclick = ()=>{
+        // 上限チェック：既にその記号が上限まで使われていて、
+        // かつこの日がまだその記号でない場合だけブロックする
+        // （既にその記号になっている日を別の記号に変えるのは常にOK）
+        const rules = settings.rules || {};
+        if(m === "◎" && rules.maxMaru2 > 0 && answers[t.date] !== "◎"){
+          const cur = Object.values(answers).filter(v=>v==="◎").length;
+          if(cur >= rules.maxMaru2){
+            alert(`「◎」は${rules.maxMaru2}日までです。別の日の◎を外してから選び直してください。`);
+            return;
+          }
+        }
+        if(m === "×" && rules.maxBatsu > 0 && answers[t.date] !== "×"){
+          const cur = Object.values(answers).filter(v=>v==="×").length;
+          if(cur >= rules.maxBatsu){
+            alert(`「×」は${rules.maxBatsu}日までです。別の日の×を外してから選び直してください。`);
+            return;
+          }
+        }
         answers[t.date] = m;
         saveDraft();
         renderDays();       // 選択状態を描き直す
         updateProgress();
+        updateLimitCounter();
       };
       marks.appendChild(b);
     });
     row.appendChild(marks);
     box.appendChild(row);
   });
+}
+
+/* ============================================================
+   ◎×の上限カウンター表示
+   ============================================================ */
+function updateLimitCounter(){
+  const box = document.getElementById("limitCounter");
+  const rules = settings.rules || {};
+  if(!rules.maxMaru2 && !rules.maxBatsu){
+    box.innerHTML = "";   // 上限が設定されていなければ何も表示しない
+    return;
+  }
+  const nMaru2 = Object.values(answers).filter(v=>v==="◎").length;
+  const nBatsu = Object.values(answers).filter(v=>v==="×").length;
+
+  let html = "";
+  if(rules.maxMaru2 > 0){
+    const cls = nMaru2 > rules.maxMaru2 ? "over" : (nMaru2 === rules.maxMaru2 ? "full" : "");
+    html += `<span class="chip ${cls}">◎ ${nMaru2}/${rules.maxMaru2}日</span>`;
+  }
+  if(rules.maxBatsu > 0){
+    const cls = nBatsu > rules.maxBatsu ? "over" : (nBatsu === rules.maxBatsu ? "full" : "");
+    html += `<span class="chip ${cls}">× ${nBatsu}/${rules.maxBatsu}日</span>`;
+  }
+  box.innerHTML = html;
 }
 
 /* ============================================================
@@ -518,12 +676,12 @@ function bulkFill(mark, targetType){
     if(targetType==="empty" && !answers[t.date]) answers[t.date]=mark;
     if(targetType==="sunday" && (t.dow===0 || t.holiday)) answers[t.date]=mark;
   });
-  saveDraft(); renderDays(); updateProgress();
+  saveDraft(); renderDays(); updateProgress(); updateLimitCounter();
 }
 function bulkClear(){
   if(!confirm("入力をすべて消してやり直しますか？")) return;
   answers = {};
-  saveDraft(); renderDays(); updateProgress();
+  saveDraft(); renderDays(); updateProgress(); updateLimitCounter();
 }
 
 /* ============================================================
@@ -631,6 +789,9 @@ async function submit(){
       document.getElementById("mainArea").classList.add("hidden");
       document.getElementById("footerBar").classList.add("hidden");
       document.getElementById("doneScreen").classList.remove("hidden");
+      document.getElementById("doneSummary").innerHTML =
+        `<b>${staff.name}</b>（${staff.job}）　${periodLabel()}<br>締切までは何度でも修正・再送信できます（最後に送った内容が有効）`;
+      renderResultTable();
       window.scrollTo(0,0);
     }else{
       showBanner("error", "送信できませんでした：" + (result.error || "不明なエラー"));
@@ -642,6 +803,29 @@ async function submit(){
     btn.textContent = "送信する";
     updateProgress();
   }
+}
+
+/* ============================================================
+   送信内容の確認表（スクリーンショット向けのコンパクトなグリッド）
+   ------------------------------------------------------------
+   長期間（半年など）でも縦に長くなりすぎないよう、
+   1件ずつ縦に並べる表ではなく、小さなカードを5列に折り返す形にしている。
+   ============================================================ */
+function renderResultTable(){
+  const wrap = document.getElementById("resultTableWrap");
+  const cls = {"◎":"m2","〇":"m1","△":"m3","×":"m4"};
+  let cells = "";
+  targetDays.forEach(t=>{
+    const mark = answers[t.date] || "";
+    const [, mm] = t.month.split("-");
+    const isSun = (t.dow===0 || t.holiday);
+    const dowLabel = t.holiday ? "祝" : DOW_JA[t.dow];
+    cells += `<div class="result-cell">`+
+             `<span class="rd ${isSun?"sun":"sat"}">${Number(mm)}/${t.day}(${dowLabel})</span>`+
+             `<span class="rm ${cls[mark]||'none'}">${mark||"―"}</span>`+
+             `</div>`;
+  });
+  wrap.innerHTML = `<div class="result-grid">${cells}</div>`;
 }
 
 function backToEdit(){
