@@ -171,6 +171,18 @@ input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(
     </div>
   </div>
 
+  <!-- 対象外の職員 -->
+  <div class="card" id="excludeCard">
+    <h2>今回の対象外にする職員</h2>
+    <div class="hint" style="margin-bottom:10px;">
+      産休・異動・長期休職などで、今回の期だけ希望を聞かなくてよい職員にチェックを入れてください。
+      チェックした職員は、入力アプリの名前選択と、シフト作成画面の両方から一時的に外れます
+      （名簿から消えるわけではなく、次回また対象に戻せます）。
+    </div>
+    <div id="excludeList" style="display:flex; flex-wrap:wrap; gap:8px 16px; font-size:13.5px;"></div>
+  </div>
+
+  <script src="staff.js"></script>
 
   <!-- 保存（実運用モードのみパスワード必要） -->
   <div class="card">
@@ -236,8 +248,29 @@ if(localStorage.getItem(LOGIN_KEY) === "1"){
 let demoMode = false;
 const DEMO_KEY = "shift_demo_rules";   // index.html と共通の合言葉
 
+/* ============================================================
+   対象外の職員チェックボックス一覧を作る
+   ============================================================ */
+function renderExcludeList(excludedIds){
+  const box = document.getElementById("excludeList");
+  box.innerHTML = "";
+  const excludedSet = new Set(excludedIds || []);
+  ["ST","OT","PT"].forEach(job=>{
+    STAFF.filter(s=>s.job===job).forEach(s=>{
+      const label = document.createElement("label");
+      label.style.cssText = "display:flex; align-items:center; gap:5px;";
+      label.innerHTML = `<input type="checkbox" data-staff-id="${s.id}" ${excludedSet.has(s.id)?"checked":""}> ${s.name}（${s.job}）`;
+      box.appendChild(label);
+    });
+  });
+}
+function getExcludedIds(){
+  return Array.from(document.querySelectorAll('#excludeList input[type="checkbox"]:checked'))
+    .map(el => el.dataset.staffId);
+}
+
 async function init(){
-  const APP_VERSION = "2026-07-13a";
+  const APP_VERSION = "2026-07-14a";
   document.getElementById("versionFooter").textContent = "app version: " + APP_VERSION;
 
   if(!CONFIG.GAS_URL){
@@ -254,6 +287,7 @@ async function init(){
       document.getElementById("maxMaru2").value = d.maxMaru2 || 0;
       document.getElementById("maxBatsu").value = d.maxBatsu || 0;
     }catch(e){}
+    renderExcludeList([]);
     return;
   }
 
@@ -267,6 +301,7 @@ async function init(){
     document.getElementById("deadline").value = s.deadline;
     document.getElementById("maxMaru2").value = s.rules.maxMaru2 || 0;
     document.getElementById("maxBatsu").value = s.rules.maxBatsu || 0;
+    renderExcludeList(s.excludedStaffIds || []);
     showBanner("", "現在の設定を読み込みました。変更して保存してください。");
   }catch(e){
     showBanner("error", "設定の読み込みに失敗しました：" + e);
@@ -295,6 +330,7 @@ async function save(){
     deadline: document.getElementById("deadline").value,
     maxMaru2: Number(document.getElementById("maxMaru2").value) || 0,
     maxBatsu: Number(document.getElementById("maxBatsu").value) || 0,
+    excludedStaffIds: getExcludedIds(),
     password: document.getElementById("password").value
   };
   if(!payload.monthFrom || !payload.deadline){
