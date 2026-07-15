@@ -382,6 +382,7 @@ let monthTo = "";        // "2026-12"（単月の場合はmonthFromと同じ）
 let targetDays = [];     // [{date,day,dow,holiday,month}]
 let responses = {};      // staffId → {answers, comment, sentAt}
 let excludedIds = new Set();  // 今回の期だけ対象外にした職員ID
+let requiredCountsFromSettings = {};  // settings.htmlで決めた必要人数（0人の日を除外する判定にだけ使う）
 let req = {};            // date → 必要人数
 let assignment = {};     // date → {staffId:true}
 
@@ -389,7 +390,7 @@ const DOW_JA = ["日","月","火","水","木","金","土"];
 const MARK_CLASS = {"◎":"p-m2","〇":"p-m1","△":"p-m3","×":"p-m4"};
 // 画面の隅に表示する目印。ファイルを差し替えたら、この文字も変える。
 // 差し替えたはずなのに古い表示のままなら、ブラウザのキャッシュが原因と分かる。
-const APP_VERSION = "2026-07-15a";
+const APP_VERSION = "2026-07-15f";
 const PREF_SCORE = {"◎":3,"〇":2,"△":1};   // 自動割り当て時の優先度
 
 /* ============================================================
@@ -458,6 +459,17 @@ async function init(){
       document.getElementById("monthFromInput").value = s.monthFrom;
       document.getElementById("monthToInput").value = s.monthTo;
       excludedIds = new Set(s.excludedStaffIds || []);
+
+      // settings.htmlで「0人」に設定した日は、職員も回答していないので
+      // シフト表の列自体を出さない（人数を直す手間そのものをなくす）。
+      // ※これ以外の数字は自動反映しない（前回、勝手に数字が入って
+      //   分かりにくいという指摘があったため、0人の除外だけに絞っている）
+      try{
+        const rres = await fetch(CONFIG.GAS_URL + "?action=requiredCounts");
+        const rdata = await rres.json();
+        requiredCountsFromSettings = rdata.ok ? (rdata.counts || {}) : {};
+      }catch(e){ requiredCountsFromSettings = {}; }
+
       await loadMonth();
     }catch(e){
       showBanner("error", "サーバーに接続できませんでした：" + e);
@@ -497,25 +509,17 @@ async function loadMonth(){
 
   restoreState();   // この期間の必要人数・割り当てを端末から復元
 
-  // settings.htmlで先に決めた必要人数があれば、まだこの端末で
-  // 一度も設定していない日にだけ初期値として反映する
-  // （既にこの端末で手直し済みの日は、それを優先して上書きしない）
-  if(!demoMode){
-    try{
-      const res = await fetch(CONFIG.GAS_URL + "?action=requiredCounts");
-      const data = await res.json();
-      if(data.ok){
-        let filled = 0;
-        targetDays.forEach(t=>{
-          if(req[t.date] === undefined && data.counts[t.date] !== undefined){
-            req[t.date] = data.counts[t.date];
-            filled++;
-          }
-        });
-        if(filled > 0) saveState();
-      }
-    }catch(e){ /* 取れなくても致命的ではないので静かに無視 */ }
-  }
+  // settings.htmlで決めた数字を、まだこの端末で何も設定していない
+  // 日にだけ初期値として入れる（既にこの端末で手直し済みの日は、
+  // それを優先して上書きしない）。
+  let filled = 0;
+  targetDays.forEach(t=>{
+    if(req[t.date] === undefined && requiredCountsFromSettings[t.date] !== undefined){
+      req[t.date] = requiredCountsFromSettings[t.date];
+      filled++;
+    }
+  });
+  if(filled > 0) saveState();
 
   renderAll();
 }
