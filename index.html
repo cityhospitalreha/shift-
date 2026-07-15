@@ -377,11 +377,12 @@ let holidays = {};       // {"2026-08-11":"山の日", ...}
 let targetDays = [];     // 対象月の土日祝 [{date, dow, holiday}, ...]
 let answers = {};        // {"2026-08-01":"◎", ...} 入力内容
 let demoMode = false;    // GAS未接続で動かしているか
+let requiredCounts = {}; // {"2026-09-05": 5, ...} その日の必要人数の目安
 
 const MARKS = ["◎","〇","△","×"];
 const DOW_JA = ["日","月","火","水","木","金","土"];
 // 画面の隅に表示する目印。ファイルを差し替えたら、この文字も変える。
-const APP_VERSION = "2026-07-13a";
+const APP_VERSION = "2026-07-15b";
 
 /* ============================================================
    起動処理
@@ -410,7 +411,7 @@ async function init(){
       const d = JSON.parse(localStorage.getItem("shift_demo_rules") || "{}");
       demoRules = { maxMaru2: Number(d.maxMaru2)||0, maxBatsu: Number(d.maxBatsu)||0 };
     }catch(e){}
-    settings = { monthFrom: "2026-09", monthTo: "2026-12", deadline: "2026-12-31", closed:false, rules: demoRules };
+    settings = { monthFrom: "2026-09", monthTo: "2026-12", deadline: "2026-12-31", closed:false, rules: demoRules, excludedStaffIds: [] };
     showBanner("demo", "デモモード（GAS未接続）：送信は保存されません。9月〜12月の4ヶ月分をまとめて表示しています。");
   }else{
     try{
@@ -434,6 +435,14 @@ async function init(){
       document.getElementById("deadlineChip").textContent = "";
       return;
     }
+
+    // 必要人数（settings.htmlで先に決めた目安）を取得。
+    // 取れなくても入力自体はできるので、失敗しても静かに無視する。
+    try{
+      const rres = await fetch(CONFIG.GAS_URL + "?action=requiredCounts");
+      const rdata = await rres.json();
+      if(rdata.ok) requiredCounts = rdata.counts || {};
+    }catch(e){ requiredCounts = {}; }
   }
 
   // --- ヘッダー表示 ---
@@ -490,10 +499,13 @@ function updateHeader(){
    ============================================================ */
 function buildStaffSelect(){
   const sel = document.getElementById("staffSelect");
+  const excluded = new Set(settings.excludedStaffIds || []);
   ["ST","OT","PT"].forEach(job=>{
+    const members = STAFF.filter(s=>s.job===job && !excluded.has(s.id));
+    if(members.length===0) return;   // その職種が全員対象外なら見出しごと出さない
     const grp = document.createElement("optgroup");
     grp.label = job;
-    STAFF.filter(s=>s.job===job).forEach(s=>{
+    members.forEach(s=>{
       const op = document.createElement("option");
       op.value = s.id;
       op.textContent = s.name;
@@ -559,6 +571,10 @@ function buildTargetDays(){
       const key = fmtDate(dt);
       const holiday = holidays[key] || null;
       if(dow===0 || dow===6 || holiday){
+        // 必要人数が「0人」と明示的に設定されている日は、そもそも
+        // 誰にも希望を聞く必要がないので、カレンダーに出さない。
+        // （まだ何も設定されていない日＝未設定は、従来通り表示する）
+        if(requiredCounts[key] === 0) continue;
         targetDays.push({date:key, day:d, dow:dow, holiday:holiday, month:cur});
       }
     }

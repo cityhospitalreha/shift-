@@ -389,7 +389,7 @@ const DOW_JA = ["日","月","火","水","木","金","土"];
 const MARK_CLASS = {"◎":"p-m2","〇":"p-m1","△":"p-m3","×":"p-m4"};
 // 画面の隅に表示する目印。ファイルを差し替えたら、この文字も変える。
 // 差し替えたはずなのに古い表示のままなら、ブラウザのキャッシュが原因と分かる。
-const APP_VERSION = "2026-07-14a";
+const APP_VERSION = "2026-07-15a";
 const PREF_SCORE = {"◎":3,"〇":2,"△":1};   // 自動割り当て時の優先度
 
 /* ============================================================
@@ -496,6 +496,27 @@ async function loadMonth(){
   // （デモモードでは「デモデータ生成」ボタンで responses を作る）
 
   restoreState();   // この期間の必要人数・割り当てを端末から復元
+
+  // settings.htmlで先に決めた必要人数があれば、まだこの端末で
+  // 一度も設定していない日にだけ初期値として反映する
+  // （既にこの端末で手直し済みの日は、それを優先して上書きしない）
+  if(!demoMode){
+    try{
+      const res = await fetch(CONFIG.GAS_URL + "?action=requiredCounts");
+      const data = await res.json();
+      if(data.ok){
+        let filled = 0;
+        targetDays.forEach(t=>{
+          if(req[t.date] === undefined && data.counts[t.date] !== undefined){
+            req[t.date] = data.counts[t.date];
+            filled++;
+          }
+        });
+        if(filled > 0) saveState();
+      }
+    }catch(e){ /* 取れなくても致命的ではないので静かに無視 */ }
+  }
+
   renderAll();
 }
 

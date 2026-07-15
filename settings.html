@@ -182,6 +182,31 @@ input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(
     <div id="excludeList" style="display:flex; flex-wrap:wrap; gap:8px 16px; font-size:13.5px;"></div>
   </div>
 
+  <!-- 必要人数（募集前の目安設定） -->
+  <div class="card" id="reqCountCard">
+    <h2>必要人数（募集前の目安）</h2>
+    <div class="hint" style="margin-bottom:12px;">
+      ここで先に人数の目安を決めておくと、職員が希望を入力する際にも表示されます。
+      「この日はあまり人数がいらない」と分かれば、◎や×の無駄遣いを防げます。
+      シフト作成画面（admin.html）でも引き続き個別に調整できます。
+    </div>
+    <div class="row2" style="margin-bottom:10px;">
+      <div class="field">
+        <label>土曜の必要人数</label>
+        <input type="number" id="reqSat" min="0" max="99" value="5">
+      </div>
+      <div class="field">
+        <label>日曜・祝日の必要人数</label>
+        <input type="number" id="reqSun" min="0" max="99" value="3">
+      </div>
+    </div>
+    <button type="button" onclick="applyWeekdayPatternToList()" style="width:auto; padding:8px 16px; background:var(--surface); color:var(--accent); border:1px solid var(--accent); border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; margin-bottom:14px;">
+      この曜日パターンを下の一覧に反映
+    </button>
+    <div class="hint" style="margin-bottom:6px;">個別に調整したい日があれば、下の一覧で直接数字を書き換えてください。</div>
+    <div id="reqCountList" style="max-height:280px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:8px;"></div>
+  </div>
+
   <script src="staff.js"></script>
 
   <!-- 保存（実運用モードのみパスワード必要） -->
@@ -270,7 +295,7 @@ function getExcludedIds(){
 }
 
 async function init(){
-  const APP_VERSION = "2026-07-14a";
+  const APP_VERSION = "2026-07-15a";
   document.getElementById("versionFooter").textContent = "app version: " + APP_VERSION;
 
   if(!CONFIG.GAS_URL){
@@ -279,6 +304,7 @@ async function init(){
     document.getElementById("modeLabel").textContent = "デモモード";
     document.getElementById("periodCard").classList.add("hidden");  // 期間はデモでは固定
     document.getElementById("pwField").classList.add("hidden");     // パスワード不要
+    document.getElementById("reqCountCard").classList.add("hidden"); // 必要人数もデモでは非表示（期間が固定のため）
     showBanner("", "デモモード：入力ルールを保存すると、同じ端末で開いた入力アプリ（デモ）に反映されます。");
 
     // 保存済みのデモルールがあれば表示
@@ -301,11 +327,109 @@ async function init(){
     document.getElementById("deadline").value = s.deadline;
     document.getElementById("maxMaru2").value = s.rules.maxMaru2 || 0;
     document.getElementById("maxBatsu").value = s.rules.maxBatsu || 0;
+    document.getElementById("reqSat").value = s.reqSat || 5;
+    document.getElementById("reqSun").value = s.reqSun || 3;
     renderExcludeList(s.excludedStaffIds || []);
+
+    // 対象期間の土日祝リストを作り、既存の必要人数を読み込んで一覧に反映
+    await buildReqCountList(s.monthFrom, s.monthTo);
+
     showBanner("", "現在の設定を読み込みました。変更して保存してください。");
   }catch(e){
     showBanner("error", "設定の読み込みに失敗しました：" + e);
   }
+}
+
+/* ============================================================
+   必要人数の一覧（日付ごとの目安）
+   ============================================================ */
+let reqTargetDays = [];
+let reqCounts = {};
+const HOLIDAYS_FALLBACK = {
+  "2026-01-01":"元日","2026-01-12":"成人の日","2026-02-11":"建国記念の日",
+  "2026-02-23":"天皇誕生日","2026-03-20":"春分の日","2026-04-29":"昭和の日",
+  "2026-05-03":"憲法記念日","2026-05-04":"みどりの日","2026-05-05":"こどもの日",
+  "2026-05-06":"振替休日","2026-07-20":"海の日","2026-08-11":"山の日",
+  "2026-09-21":"敬老の日","2026-09-22":"国民の休日","2026-09-23":"秋分の日",
+  "2026-10-12":"スポーツの日","2026-11-03":"文化の日","2026-11-23":"勤労感謝の日",
+  "2027-01-01":"元日","2027-01-11":"成人の日","2027-02-11":"建国記念の日",
+  "2027-02-23":"天皇誕生日","2027-03-21":"春分の日","2027-03-22":"振替休日",
+  "2027-04-29":"昭和の日","2027-05-03":"憲法記念日","2027-05-04":"みどりの日",
+  "2027-05-05":"こどもの日","2027-07-19":"海の日","2027-08-11":"山の日",
+  "2027-09-20":"敬老の日","2027-09-23":"秋分の日","2027-10-11":"スポーツの日",
+  "2027-11-03":"文化の日","2027-11-23":"勤労感謝の日"
+};
+const DOW_JA = ["日","月","火","水","木","金","土"];
+
+function nextMonthStr(ym){
+  const [y,m] = ym.split("-").map(Number);
+  const d = new Date(y, m, 1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+}
+
+async function buildReqCountList(monthFrom, monthTo){
+  let holidays = {};
+  try{
+    const hres = await fetch("https://holidays-jp.github.io/api/v1/date.json");
+    holidays = await hres.json();
+  }catch(e){ holidays = HOLIDAYS_FALLBACK; }
+
+  reqTargetDays = [];
+  let cur = monthFrom;
+  let guard = 0;
+  while(cur <= monthTo && guard < 24){
+    const [y,m] = cur.split("-").map(Number);
+    const last = new Date(y, m, 0).getDate();
+    for(let d=1; d<=last; d++){
+      const dt = new Date(y, m-1, d);
+      const dow = dt.getDay();
+      const key = `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      const holiday = holidays[key] || null;
+      if(dow===0 || dow===6 || holiday){
+        reqTargetDays.push({date:key, day:d, dow:dow, holiday:holiday, month:cur});
+      }
+    }
+    cur = nextMonthStr(cur);
+    guard++;
+  }
+
+  // 既存の必要人数を取得（settings.htmlやadmin.htmlで過去に保存されていれば反映）
+  reqCounts = {};
+  try{
+    const res = await fetch(CONFIG.GAS_URL + "?action=requiredCounts");
+    const data = await res.json();
+    if(data.ok) reqCounts = data.counts || {};
+  }catch(e){ /* 取得失敗時は空のまま。曜日パターンで埋めればOK */ }
+
+  renderReqCountList();
+}
+
+function renderReqCountList(){
+  const box = document.getElementById("reqCountList");
+  box.innerHTML = "";
+  reqTargetDays.forEach(t=>{
+    const isSun = (t.dow===0 || t.holiday);
+    const val = reqCounts[t.date] ?? "";
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex; align-items:center; gap:8px; padding:4px 2px; border-bottom:1px solid var(--border);";
+    row.innerHTML = `<div style="min-width:100px; font-size:12.5px; font-weight:600; color:${isSun?"var(--err)":"var(--accent)"};">
+                        ${Number(t.month.split("-")[1])}/${t.day}(${t.holiday?"祝":DOW_JA[t.dow]})
+                      </div>
+                      <input type="number" min="0" max="99" value="${val}" data-date="${t.date}"
+                        style="width:70px; padding:4px 6px; border:1px solid var(--border-strong); border-radius:4px;"
+                        onchange="reqCounts['${t.date}']=Number(this.value)||0;">`;
+    box.appendChild(row);
+  });
+}
+
+function applyWeekdayPatternToList(){
+  const sat = Number(document.getElementById("reqSat").value) || 0;
+  const sun = Number(document.getElementById("reqSun").value) || 0;
+  reqTargetDays.forEach(t=>{
+    const isSun = (t.dow===0 || t.holiday);
+    reqCounts[t.date] = isSun ? sun : sat;
+  });
+  renderReqCountList();
 }
 
 async function save(){
@@ -331,6 +455,8 @@ async function save(){
     maxMaru2: Number(document.getElementById("maxMaru2").value) || 0,
     maxBatsu: Number(document.getElementById("maxBatsu").value) || 0,
     excludedStaffIds: getExcludedIds(),
+    reqSat: Number(document.getElementById("reqSat").value) || 0,
+    reqSun: Number(document.getElementById("reqSun").value) || 0,
     password: document.getElementById("password").value
   };
   if(!payload.monthFrom || !payload.deadline){
@@ -347,11 +473,25 @@ async function save(){
   try{
     const res = await fetch(CONFIG.GAS_URL, { method:"POST", body: JSON.stringify(payload) });
     const result = await res.json();
-    if(result.ok){
-      showBanner("ok", "保存しました。入力アプリに即時反映されます。");
-    }else{
+    if(!result.ok){
       showBanner("error", "保存できませんでした：" + result.error);
+      return;
     }
+
+    // 必要人数の一覧（日付ごとの目安）も、期間の設定とあわせて保存する
+    if(reqTargetDays.length > 0){
+      const res2 = await fetch(CONFIG.GAS_URL, {
+        method:"POST",
+        body: JSON.stringify({ action:"setRequiredCounts", counts: reqCounts, password: payload.password })
+      });
+      const result2 = await res2.json();
+      if(!result2.ok){
+        showBanner("error", "期間の設定は保存されましたが、必要人数の保存に失敗しました：" + result2.error);
+        return;
+      }
+    }
+
+    showBanner("ok", "保存しました。入力アプリに即時反映されます。");
   }catch(e){
     showBanner("error", "通信エラー：" + e);
   }finally{
